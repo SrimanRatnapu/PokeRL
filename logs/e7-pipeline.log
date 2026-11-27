@@ -1,0 +1,14 @@
+[17:00:51] E7 start
+[17:00:51] v3ft train
+[18:33:12] v3ft exit 0
+[18:33:12] v2ft train
+[19:51:05] v2ft exit 0
+[19:51:05] eval v3ft (500/opponent)
+[19:51:45] eval v3ft exit 0
+[19:51:45] eval v2ft (500/opponent)
+[19:52:31] eval v2ft exit 0
+[19:52:31] head-to-head v3ft vs v2ft (500)
+[19:52:56] h2h exit 0
+[19:52:56] head-to-head v3ft vs champion (500)
+[19:53:17] h2h-champ exit 0
+[19:53:17] E7 done

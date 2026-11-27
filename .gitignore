@@ -1,0 +1,31 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Showdown server: a separate checkout of smogon/pokemon-showdown (see scripts/setup_showdown.sh)
+pokemon-showdown/
+showdown-server.log
+
+# Checkpoints are large (~1 GB of step snapshots); only the models the docs refer to are tracked
+checkpoints/**
+!checkpoints/
+!checkpoints/champion.zip
+!checkpoints/v3ft/
+!checkpoints/v3ft/final.zip
+!checkpoints/v2ft/
+!checkpoints/v2ft/final.zip
+!checkpoints/v3_init/
+!checkpoints/v3_init/init.zip
+!checkpoints/v4_init/
+!checkpoints/v4_init/init.zip
+
+# Behavior-cloning datasets (38 MB, regenerate with `python -m pokebot.bc collect`)
+data/*.npz
+
+# Smoke-test output, replays
+logs/smoke/
+replays/
+
+.DS_Store

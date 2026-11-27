@@ -1,0 +1,18 @@
+checkpoints/v2ft/final.zip: feature set v2 (346 dims)
+Playing 500 battles vs random ...
+  -> 492/500 wins (98.4%), 12.7s
+Playing 500 battles vs maxpower ...
+  -> 471/500 wins (94.2%), 8.7s
+Playing 500 battles vs heuristic ...
+  -> 388/500 wins (77.6%), 10.0s
+Playing 500 battles vs simple_heuristic ...
+  -> 357/500 wins (71.4%), 11.8s
+
+Agent: checkpoints/v2ft/final.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+random                                   492/500     98.4%    [96.9%, 99.2%]    22.6     0   12.7s
+maxpower                                 471/500     94.2%    [91.8%, 95.9%]    17.0     0    8.7s
+heuristic                                388/500     77.6%    [73.7%, 81.0%]    18.2     0   10.0s
+simple_heuristic                         357/500     71.4%    [67.3%, 75.2%]    18.6     0   11.8s
+
