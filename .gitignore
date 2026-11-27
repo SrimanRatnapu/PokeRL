@@ -29,3 +29,7 @@ logs/smoke/
 replays/
 
 .DS_Store
+!checkpoints/v4ft/
+!checkpoints/v4ft/final.zip
+!checkpoints/v3ft2/
+!checkpoints/v3ft2/final.zip

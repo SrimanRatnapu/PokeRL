@@ -263,14 +263,40 @@ A running record of every significant design decision, experiment, and result in
 - **Warm start:** `checkpoints/v4_init/init.zip` is `v3ft/final.zip` widened 635 → 752 with zero-initialised new columns (D20). Parity is exact: it agreed on 86 of 86 real turns and scored 39/50 vs SimpleHeuristics.
 - **RL lesson / expectation:** E7 says a feature only helps if it changes the best action often enough for the win/loss signal to notice it. Weather-chip KOs on switch-in are rare. Immunities (switching a Levitate mon into Earthquake), Intimidate and residual damage come up far more often, and those are where any measurable gain should come from.
 
-### E8 (planned, not run). Does v4 help?
-- **Treatment:** `--run-name v4ft --features v4 --init-from checkpoints/v4_init/init.zip --start-stage 4 --lr 1e-4 --shaping-start 0.1 --shaping-end 0.1 --timesteps 2000000 --n-envs 4 --eval-battles 200`
-- **Control:** the same settings from `checkpoints/v3ft/final.zip` with `--features v3` (run name `v3ft2`), so "more training" isn't mistaken for "abilities".
-- **Judge:** 500-battle evals of each against the scripted bots, plus 500-battle head-to-heads v4ft vs v3ft2 and v4ft vs champion. Each run is about 90 min on the usual 4-env budget; run them one after the other.
+### E8. Does v4 help? (run 2026-11-27, 01:05–03:35)
+- **Setup:**
+  - Treatment `v4ft`: `--features v4 --init-from checkpoints/v4_init/init.zip`.
+  - Control `v3ft2`: `--features v3 --init-from checkpoints/v3ft/final.zip`, so "2M more steps" isn't mistaken for "abilities".
+  - Both: `--start-stage 4 --lr 1e-4 --shaping-start 0.1 --shaping-end 0.1 --timesteps 2000000 --n-envs 4 --eval-battles 200`.
+  - The two runs went **side by side** (the user OK'd about 2 cores). They took about 2h05m and 1h45m. v4ft ran at about 146 steps/s against 194 for v3ft2, from the extra ability maths.
+  - The four eval jobs ran in parallel afterwards. Script: `scripts/run_e8.sh`.
+- **500-battle evals** (win rate, 95% Wilson CI):
+
+  | model | random | maxpower | heuristic | simple_heuristic |
+  |---|---|---|---|---|
+  | v4ft | 97.4% | 91.2% | 74.0% [70.0, 77.7] | **77.0%** [73.1, 80.5] |
+  | v3ft2 (control) | 99.4% | 91.0% | 76.8% [72.9, 80.3] | 68.8% [64.6, 72.7] |
+  | *v3ft (E7, same start as the control)* | 98.8% | 92.6% | 76.8% | 74.2% |
+
+- **Head-to-heads (500):**
+  - v4ft vs v3ft2: **48.6%** [44.2, 53.0].
+  - v4ft vs champion: **53.6%** [49.2, 57.9] (p ≈ 0.11).
+- **Verdict: no measurable gain, a null result again.**
+  - The only clear gap is against simple_heuristic (77.0 vs 68.8). But the control fell 5 points there from its own starting model (v3ft, 74.2) without any feature change, and v4ft did slightly *worse* against heuristic.
+  - So the spread between runs on a single scripted opponent (about ±4 points) is as large as the effect we're looking for. The head-to-heads, which test the thing we care about directly, both include 50%.
+  - The champion stays `checkpoints/champion.zip`. v4ft at 53.6% against it is a candidate worth re-testing with more battles, not a promotion.
+- **The trigger position:**
+  - The lost-game switch (D21) was rebuilt from the unit test. It's a stripped-down state: no moves revealed, no earlier turns.
+  - v4ft puts 25% on Tyranitar and 75% on Espeon. The v3ft2 control (84%) and the champion (78%) both pick Tyranitar there.
+  - The state is out of distribution, so read this loosely. Still, it says v4ft has *not* learned to cash in a "sand finishes them" flag. That fits the D21 expectation: the situation is too rare for the win/loss signal to teach it in 2M steps.
+- **RL lesson:**
+  - Three feature upgrades in a row (v3 items/memory, v4 abilities) have changed nothing measurable. The bottleneck is no longer *what the bot can see*. It is *what the training signal can teach*: one ±1 reward per roughly 30-turn game, against a fixed pool of opponents the bot already beats about 75% of the time.
+  - A rule-like insight ("a weather setter on switch-in KOs a chipped foe") is better taught directly: as an auxiliary loss on the feature, a hand-written override for rare tactical cases, or search (look one turn ahead with the damage model) rather than hoping PPO finds it.
+  - Also: one 500-battle eval against one opponent is not enough to rank two runs, so judge by the head-to-head.
 
 ## Ideas for next time (not done)
 - **Stronger opponents:** the agent now beats every scripted bot ~70%+. Further progress will come from self-play and from league-style training (keep "exploiter" agents that only try to beat the current champion).
-- ~~Memory~~ and ~~items in the damage model~~: built as v3 (D19), trained in E7, no measurable gain. Next to try: a per-turn shared encoder for the history block, a longer v3 run, or a bigger network. Abilities: built as v4 (D21).
+- ~~Memory~~ and ~~items in the damage model~~: built as v3 (D19), trained in E7, no measurable gain. Next to try: a per-turn shared encoder for the history block, a longer v3 run, or a bigger network. Abilities: built as v4 (D21), trained in E8, also no measurable gain. Next: one-turn lookahead search using the damage model, or stronger/league opponents (see E8 lesson).
 - **Human replays for BC:** imitation helps most when the demonstrator is far stronger than what RL finds alone. Ladder replays would be a much better teacher than SimpleHeuristics.
 - **Bigger evals during training** (500 battles) or a moving average, to make `best.zip` trustworthy.
 - **Testing on the real ladder** would need an account and is against the spirit of the local-only rule (D2). Do it only with a clearly-marked bot account and the server's bot rules in mind.

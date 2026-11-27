@@ -1,0 +1,11 @@
+[01:05:12] E8 start
+[01:05:12] v4ft train
+[01:28:21] E8 switched to parallel at user's request (v3ft2 started 01:2x)
+[01:28:21] E8 start
+[01:28:21] waiting on running training pids: 58957 60638
+[01:30:47] evals switched to parallel (user away, fans OK)
+[01:30:47] E8 start
+[01:30:47] waiting on running training pids: 58957 60638
+[03:12:48] training done
+[03:12:48] evals: v4ft, v3ft2 (500/opponent), h2h v4ft vs v3ft2, h2h v4ft vs champion (500) - in parallel
+[03:35:04] evals finished (pipeline stopped by hand: bare 'wait' deadlocked on caffeinate; fixed in script)

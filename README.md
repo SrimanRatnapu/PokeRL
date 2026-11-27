@@ -130,7 +130,7 @@ the machine gets hot.
     --start-stage 4 --lr 1e-4 --shaping-start 0.1 --shaping-end 0.1 --timesteps 2000000 --n-envs 4
 ```
 
-### v4 features: abilities (built, not trained yet)
+### v4 features: abilities (trained in E8: no gain over the champion yet)
 
 ```bash
 # widen the v3 fine-tune 635 -> 752 (already done: checkpoints/v4_init/init.zip)
