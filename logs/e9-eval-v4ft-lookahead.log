@@ -1,0 +1,33 @@
+checkpoints/v4ft/final.zip: feature set v4 (752 dims)
+Playing 500 battles vs lookahead ...
+2026-11-27 06:01:35,245 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 500 turns (on turn 1000)."]
+2026-11-27 06:01:36,379 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 400 turns (on turn 1000)."]
+2026-11-27 06:01:37,540 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 300 turns (on turn 1000)."]
+2026-11-27 06:01:38,745 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 200 turns (on turn 1000)."]
+2026-11-27 06:01:40,000 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 100 turns (on turn 1000)."]
+2026-11-27 06:01:40,125 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 90 turns (on turn 1000)."]
+2026-11-27 06:01:40,240 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 80 turns (on turn 1000)."]
+2026-11-27 06:01:40,349 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 70 turns (on turn 1000)."]
+2026-11-27 06:01:40,464 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 60 turns (on turn 1000)."]
+2026-11-27 06:01:40,568 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 50 turns (on turn 1000)."]
+2026-11-27 06:01:40,693 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 40 turns (on turn 1000)."]
+2026-11-27 06:01:40,810 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 30 turns (on turn 1000)."]
+2026-11-27 06:01:40,926 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 20 turns (on turn 1000)."]
+2026-11-27 06:01:41,045 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 10 turns (on turn 1000)."]
+2026-11-27 06:01:41,054 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 9 turns (on turn 1000)."]
+2026-11-27 06:01:41,064 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 8 turns (on turn 1000)."]
+2026-11-27 06:01:41,074 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 7 turns (on turn 1000)."]
+2026-11-27 06:01:41,085 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 6 turns (on turn 1000)."]
+2026-11-27 06:01:41,099 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 5 turns (on turn 1000)."]
+2026-11-27 06:01:41,110 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 4 turns (on turn 1000)."]
+2026-11-27 06:01:41,121 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 3 turns (on turn 1000)."]
+2026-11-27 06:01:41,132 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 2 turns (on turn 1000)."]
+2026-11-27 06:01:41,144 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 1 turn (on turn 1000)."]
+2026-11-27 06:01:41,155 - EvAgent rlj3r - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 0 turns (on turn 1000)."]
+  -> 241/500 wins (48.2%), 23.4s
+
+Agent: checkpoints/v4ft/final.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+lookahead                                241/500     48.2%    [43.9%, 52.6%]    31.5     1   23.4s
+

@@ -1,0 +1,15 @@
+[03:51:27] E9 start
+[03:51:27] league phase A (1M)
+[04:42:36] phase A exit 0
+[04:42:36] exploiter vs phase A (500k)
+[05:08:25] exploiter exit 0
+[05:08:25] h2h exploiter vs phase A (500)
+[05:08:51] league phase B (1M, exploiter in pool)
+[06:00:18] phase B exit 0
+[06:00:18] eval league (500/opponent incl. lookahead)
+[06:01:27] eval v4ft vs lookahead (500)
+[06:01:53] eval champion vs lookahead (500)
+[06:02:12] h2h league vs v4ft (held-out matched control, 500)
+[06:02:37] h2h league vs champion (500)
+[06:02:57] h2h league vs exploiter (500)
+[06:03:23] E9 done

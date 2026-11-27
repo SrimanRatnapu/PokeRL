@@ -294,8 +294,61 @@ A running record of every significant design decision, experiment, and result in
   - A rule-like insight ("a weather setter on switch-in KOs a chipped foe") is better taught directly: as an auxiliary loss on the feature, a hand-written override for rare tactical cases, or search (look one turn ahead with the damage model) rather than hoping PPO finds it.
   - Also: one 500-battle eval against one opponent is not enough to rank two runs, so judge by the head-to-head.
 
+## Phase 6 — League training: stronger opponents
+
+### D22. Four ways to give the bot harder opponents (all built; trained together in E9)
+The E8 lesson was that the bot already beats its training opponents about 75% of the time, so most games teach it little. Four additions, all opt-in through `pokebot.train` flags:
+1. **A one-turn lookahead bot** (`bots/lookahead_bot.py`, opponent name `lookahead`).
+   - It scores every legal action with the v2–v4 damage model: who moves first, expected damage both ways, KO chances, end-of-turn residual (sand, status, Leftovers, a switch-in that sets weather). On top it adds `GAMMA = 0.6` × the best exchange the resulting matchup offers next turn.
+   - The opponent is assumed to answer with its most damaging likely move. It never terastallizes and does not model the opponent switching.
+   - Strength over 500 battles: 67.5% vs simple_heuristic, 69.5% vs heuristic, 91% vs maxpower. **The champion wins only 45–46% against it**, so it is the first scripted opponent at least as strong as our best RL model.
+   - In the D21 lost-game position it sends Tyranitar (test in `tests/test_lookahead_bot.py`).
+2. **PFSP (prioritized fictitious self-play)**, `--pfsp`.
+   - Each pool opponent is drawn with weight `max((1 − p)², 0.02)`, where `p` is the bot's recent win rate against it (Laplace-smoothed, decayed by 0.98 per game). Opponents it loses to get picked more.
+   - 25% of pool draws still go to the newest 3 snapshots, so the bot keeps playing its current self.
+   - Each checkpoint prints a `[pfsp] win rate vs ...` line.
+3. **A fixed strong pool**, `--pool-extra a.zip,b.zip`.
+   - These checkpoints stay in the self-play pool for the whole run and are never evicted. E9 used the champion, v2ft, v3ft and v3ft2.
+   - **v4ft was left out on purpose**: it's the matched control (same start, steps, LR schedule and features), so the bot must not train against the model it's judged against.
+4. **An exploiter**, using `--opponent-mix "policy:<path>=w,..."` (any weights, any checkpoint).
+   - Halfway through, a copy of the main agent trains 500k steps with 85% of its games against that frozen main agent (and 15% against simple_heuristic so it stays a sane player).
+   - It then joins the main agent's fixed pool for the second half, so the main agent has to patch whatever the exploiter found.
+- **Opponent mix in the final stage**, `--opponent-mix`: pool 55%, lookahead 20%, heuristic 10%, simple_heuristic 10%, maxpower 5%.
+- **LR schedule matched to v4ft:** phase A runs `--lr 1e-4 --lr-final-frac 0.55` over 1M (1e-4 → 5.5e-5). Phase B resumes with `--lr-final-frac 0.1`; SB3 counts progress over the combined 2M steps, so it continues 5.5e-5 → 1e-5. That is v4ft's 2M schedule exactly.
+
+### E9. Does league training help? (run 2026-11-27, 03:51–06:03)
+- **Setup** (`scripts/run_e9.sh`, one job at a time, 4 in-process envs, 1 torch thread, about one core):
+  - Phase A: `league`, 1M steps from `checkpoints/v4_init/init.zip` (51 min).
+  - Exploiter: 500k steps from phase A against phase A (26 min).
+  - Phase B: `league`, 1M more steps with the exploiter in the pool (51 min).
+  - Evals and head-to-heads, 500 battles each (3 min).
+  - The whole run took 2h12m, about half the estimate: ~330 steps/s with one job, against ~146 for v4ft when it shared the CPU with v3ft2 in E8.
+- **500-battle evals** (win rate, 95% Wilson CI):
+
+  | model | random | maxpower | heuristic | simple_heuristic | lookahead |
+  |---|---|---|---|---|---|
+  | league | 98.4% | 94.2% | 75.4% [71.4, 79.0] | 74.6% [70.6, 78.2] | 47.8% [43.5, 52.2] |
+  | v4ft (E8, matched control) | 97.4% | 91.2% | 74.0% [70.0, 77.7] | 77.0% [73.1, 80.5] | 48.2% [43.9, 52.6] |
+  | champion | | | | | 45.2% [40.9, 49.6] |
+
+- **Head-to-heads (500):**
+  - **league vs v4ft: 47.8%** [43.5, 52.2]. This is the main test.
+  - league vs champion: 53.6% [49.2, 57.9]. This is identical to v4ft vs champion in E8.
+  - Exploiter vs phase A (the agent it was trained to beat): only 54.0% [49.6, 58.3].
+  - league (final) vs exploiter: 53.0% [48.6, 57.3].
+- **Verdict: no measurable gain, a null result again.** The league bot and v4ft are indistinguishable on every opponent, including the new lookahead bot neither trained against in the same way. The champion stays `checkpoints/champion.zip`.
+- **Why the league pieces did so little:**
+  - **PFSP had nothing to prioritise.** Against nearly every pool member the bot's win rate sat between about 40% and 60%, so the weights `(1 − p)²` only ranged from about 0.16 to 0.36, barely different from uniform. PFSP pays off when a few opponents are clearly beating the agent; here none were.
+  - **The lookahead bot stayed at about 45–55% for the whole run** (`[pfsp]` lines: 47% at 950k, 46% at 1.95M, 55% at 2M on 50 games). 20% of 2M steps against it did not teach the bot to beat it.
+  - **The exploiter was weak.** It began as an exact copy of its target, at a low fine-tuning LR, for only 500k steps, and got to 54% (not significant). A useful exploiter needs to find a real hole; this one found at most a small one, so adding it to the pool changed little.
+  - So the fixed pool and the exploiter added opponents of about the same strength as the bot's own snapshots, and the training signal was much the same as v4ft's.
+- **RL lesson:**
+  - Four RL changes in a row (v3, v4, league) have now moved the needle by nothing measurable. The model's strength looks capped near "slightly better than champion" by something all of them share: the network size, the PPO hyper-parameters, or simply 2M steps from the same warm start.
+  - The lookahead bot is the one new thing that clearly works: a few hundred lines of search on the existing damage model play as well as 4M steps of PPO. That points to **search at decision time** (use the lookahead score as a prior, or let the policy pick among the lookahead's top actions) rather than more opponent engineering.
+  - The exploiter would need to start from scratch or from a different model, train longer at a higher LR, and pass a "beats its target by 60%+" bar before it joins the pool.
+
 ## Ideas for next time (not done)
-- **Stronger opponents:** the agent now beats every scripted bot ~70%+. Further progress will come from self-play and from league-style training (keep "exploiter" agents that only try to beat the current champion).
+- ~~**Stronger opponents / league**~~: built and trained in E9 (D22): PFSP, a fixed strong pool, a lookahead bot and one exploiter. No measurable gain. Next: a stronger exploiter (see E9 lesson), or combine the lookahead search with the policy at decision time.
 - ~~Memory~~ and ~~items in the damage model~~: built as v3 (D19), trained in E7, no measurable gain. Next to try: a per-turn shared encoder for the history block, a longer v3 run, or a bigger network. Abilities: built as v4 (D21), trained in E8, also no measurable gain. Next: one-turn lookahead search using the damage model, or stronger/league opponents (see E8 lesson).
 - **Human replays for BC:** imitation helps most when the demonstrator is far stronger than what RL finds alone. Ladder replays would be a much better teacher than SimpleHeuristics.
 - **Bigger evals during training** (500 battles) or a moving average, to make `best.zip` trustworthy.

@@ -1,0 +1,9 @@
+checkpoints/league/final.zip: feature set v4 (752 dims)
+checkpoints/champion.zip: feature set v2 (346 dims)
+Playing 500 battles: checkpoints/league/final.zip  vs  checkpoints/champion.zip ...
+
+Agent: checkpoints/league/final.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+compare: checkpoints/champion.zip        268/500     53.6%    [49.2%, 57.9%]    24.6     0   18.5s
+

@@ -55,6 +55,7 @@ Run every command from the project root with `.venv/bin/python`.
 
 ```
 bots/heuristic_bot.py   hand-written damage/matchup heuristic bot (baseline + example poke-env Player)
+bots/lookahead_bot.py   one-turn lookahead bot on the v2-v4 damage model (the strongest scripted opponent)
 pokebot/config.py       shared constants: BATTLE_FORMAT, ACTION_SPACE_SIZE=26, RewardConfig, dirs
 pokebot/INTERFACE.md    module contract shared by all the pokebot modules
 pokebot/features.py     v1 features: embed_battle(battle) -> 226 floats (frozen; v1 checkpoints use it)
@@ -140,6 +141,21 @@ the machine gets hot.
     --start-stage 4 --lr 1e-4 --shaping-start 0.1 --shaping-end 0.1 --timesteps 2000000 --n-envs 4
 ```
 
+### League training: stronger opponents (trained in E9: no gain over v4ft yet)
+
+The final training stage can take a custom opponent mix (`--opponent-mix`), keep strong checkpoints in
+the self-play pool for the whole run (`--pool-extra`), and pick pool opponents by how often the bot
+loses to them (`--pfsp`). Mix keys: `pool`, `random`, `maxpower`, `heuristic`, `simple_heuristic`,
+`lookahead`, or `policy:<checkpoint.zip>`. The full E9 pipeline (main agent, exploiter, second half,
+evals) is `scripts/run_e9.sh`; see docs/DECISIONS.md D22 and E9.
+
+```bash
+.venv/bin/python -m pokebot.train --run-name league --features v4 --init-from checkpoints/v4_init/init.zip \
+    --start-stage 4 --lr 1e-4 --shaping-start 0.1 --shaping-end 0.1 --timesteps 2000000 --n-envs 4 \
+    --pfsp --opponent-mix "pool=0.55,lookahead=0.20,heuristic=0.10,simple_heuristic=0.10,maxpower=0.05" \
+    --pool-extra checkpoints/champion.zip,checkpoints/v3ft/final.zip
+```
+
 ### TensorBoard
 
 ```bash
@@ -166,7 +182,8 @@ the machine gets hot.
 Options: `--battles N` (per opponent, default 200), `--opponents a,b,...`,
 `--concurrency N` (default 10), `--save-replays DIR`, `--compare PATH2`, `--stochastic`
 (sample actions instead of always picking the most likely one). `--model` also accepts a
-baseline name (`random`, `maxpower`, `heuristic`, `simple_heuristic`). The output table shows
+baseline name (`random`, `maxpower`, `heuristic`, `simple_heuristic`, `lookahead`); `lookahead`
+is not in the default opponent list, so pass it with `--opponents`. The output table shows
 wins/battles, win rate, a 95% Wilson confidence interval and the mean battle length in turns.
 
 ### Playing against the bot

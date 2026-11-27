@@ -1,0 +1,9 @@
+checkpoints/champion.zip: feature set v2 (346 dims)
+Playing 500 battles vs lookahead ...
+  -> 226/500 wins (45.2%), 17.1s
+
+Agent: checkpoints/champion.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+lookahead                                226/500     45.2%    [40.9%, 49.6%]    29.5     0   17.1s
+

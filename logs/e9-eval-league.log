@@ -1,0 +1,21 @@
+checkpoints/league/final.zip: feature set v4 (752 dims)
+Playing 500 battles vs random ...
+  -> 492/500 wins (98.4%), 13.0s
+Playing 500 battles vs maxpower ...
+  -> 471/500 wins (94.2%), 9.7s
+Playing 500 battles vs heuristic ...
+  -> 377/500 wins (75.4%), 10.4s
+Playing 500 battles vs simple_heuristic ...
+  -> 373/500 wins (74.6%), 10.8s
+Playing 500 battles vs lookahead ...
+  -> 239/500 wins (47.8%), 22.2s
+
+Agent: checkpoints/league/final.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+random                                   492/500     98.4%    [96.9%, 99.2%]    24.3     0   13.0s
+maxpower                                 471/500     94.2%    [91.8%, 95.9%]    17.5     0    9.7s
+heuristic                                377/500     75.4%    [71.4%, 79.0%]    18.1     0   10.4s
+simple_heuristic                         373/500     74.6%    [70.6%, 78.2%]    18.7     0   10.8s
+lookahead                                239/500     47.8%    [43.5%, 52.2%]    28.8     0   22.2s
+

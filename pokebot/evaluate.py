@@ -26,6 +26,7 @@ from poke_env import AccountConfiguration
 from poke_env.player import MaxBasePowerPlayer, Player, RandomPlayer, SimpleHeuristicsPlayer
 
 from bots.heuristic_bot import HeuristicBot
+from bots.lookahead_bot import LookaheadBot
 from pokebot.config import BATTLE_FORMAT
 
 # Baseline opponents, keyed by the names used in --opponents (same names as
@@ -35,6 +36,7 @@ BASELINES: dict[str, type[Player]] = {
     "maxpower": MaxBasePowerPlayer,
     "heuristic": HeuristicBot,
     "simple_heuristic": SimpleHeuristicsPlayer,
+    "lookahead": LookaheadBot,
 }
 DEFAULT_OPPONENTS = "random,maxpower,heuristic,simple_heuristic"
 
@@ -45,6 +47,7 @@ _NAME_PREFIX = {
     "maxpower": "EvMaxPower",
     "heuristic": "EvHeuristic",
     "simple_heuristic": "EvSimpleHeur",
+    "lookahead": "EvLookahead",
 }
 
 

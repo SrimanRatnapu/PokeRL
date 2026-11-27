@@ -316,7 +316,7 @@ def make_env(
 def make_opponent(kind: str, **kwargs: Any) -> Player:
     """Build an opponent Player for use inside MaskedPokeEnv.
 
-    kind: "random" | "maxpower" | "heuristic" | "simple_heuristic" | "policy".
+    kind: "random" | "maxpower" | "heuristic" | "simple_heuristic" | "lookahead" | "policy".
     For "policy": pass `model=` or `model_path=` (and optionally `deterministic=`).
     Remaining kwargs go to the Player constructor. start_listening defaults to
     False and battle_format to BATTLE_FORMAT.
@@ -334,6 +334,10 @@ def make_opponent(kind: str, **kwargs: Any) -> Player:
         from bots.heuristic_bot import HeuristicBot
 
         return HeuristicBot(**kwargs)
+    if kind == "lookahead":
+        from bots.lookahead_bot import LookaheadBot
+
+        return LookaheadBot(**kwargs)
     if kind == "policy":
         return PolicyPlayer(
             model=kwargs.pop("model", None),

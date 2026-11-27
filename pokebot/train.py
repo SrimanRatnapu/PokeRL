@@ -19,6 +19,13 @@ win rate vs that stage's opponents clears the threshold):
     4 self-play pool (65% past checkpoints, 35% scripted opponents) until the end
 Reward shaping_scale anneals linearly 1.0 -> 0.1 over the run.
 
+League options (stage 4; see docs/DECISIONS.md E9):
+    --opponent-mix "pool=0.55,lookahead=0.2,heuristic=0.1,simple_heuristic=0.1,maxpower=0.05"
+                   replace the stage-4 mix. Keys: pool, a scripted bot, or policy:<ckpt.zip>
+                   (e.g. an exploiter run: "policy:checkpoints/league_a/final.zip=0.85,simple_heuristic=0.15").
+    --pfsp         draw pool checkpoints by (1 - our win rate)^2 instead of uniformly.
+    --pool-extra a.zip,b.zip   fixed league members that stay in the pool for the whole run.
+
 Outputs: checkpoints/<run>/{step_N.zip, latest.zip, best.zip, final.zip, train_state.json}
          logs/<run>/ (TensorBoard + progress.csv): tensorboard --logdir logs
 """
@@ -96,6 +103,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     c.add_argument("--pool-size", type=int, default=20, help="max checkpoints kept in the self-play pool")
     c.add_argument("--shaping-start", type=float, default=1.0)
     c.add_argument("--shaping-end", type=float, default=0.1)
+    c.add_argument("--opponent-mix", default=None,
+                   help='replace the stage-4 opponent mix, e.g. "pool=0.6,lookahead=0.2,simple_heuristic=0.2"')
+    c.add_argument("--pfsp", action="store_true", help="prioritized fictitious self-play over the pool")
+    c.add_argument("--pool-extra", default=None, help="comma-separated checkpoints kept in the pool permanently")
 
     e = p.add_argument_group("checkpoints / eval")
     e.add_argument("--ckpt-freq", type=int, default=50_000, help="env steps between checkpoints")
@@ -127,13 +138,29 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     if len(fr) != 3 or not (0 <= fr[0] <= fr[1] <= fr[2] <= 1):
         p.error("--stage-fracs must be three increasing fractions, e.g. 0.1,0.25,0.5")
     args.stage_fracs = fr
+    if args.opponent_mix:
+        mix = {}
+        for part in args.opponent_mix.split(","):
+            key, _, w = part.strip().rpartition("=")
+            if not key:
+                p.error(f"--opponent-mix entry {part!r} is not key=weight")
+            mix[key] = float(w)
+            if key.startswith("policy:") and not Path(key[len("policy:"):]).is_file():
+                p.error(f"--opponent-mix: no such checkpoint {key[len('policy:'):]}")
+        args.opponent_mix = mix
+    if args.pool_extra:
+        args.pool_extra = [x.strip() for x in args.pool_extra.split(",") if x.strip()]
+        for x in args.pool_extra:
+            if not Path(x).is_file():
+                p.error(f"--pool-extra: no such checkpoint {x}")
     return args
 
 
 def make_vec_env(args, mix, pool, reward_cfg):
     from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecMonitor
 
-    fns = [functools.partial(build_train_env, i, mix, pool, args.seed, reward_cfg, BATTLE_FORMAT, args.features)
+    fns = [functools.partial(build_train_env, i, mix, pool, args.seed, reward_cfg, BATTLE_FORMAT, args.features,
+                             args.pfsp)
            for i in range(args.n_envs)]
     venv = SubprocVecEnv(fns, start_method="spawn") if args.subproc and args.n_envs > 1 else DummyVecEnv(fns)
     return VecMonitor(venv)
@@ -236,8 +263,12 @@ def main(argv: list[str] | None = None) -> int:
         state.stage_history = []
     args.features = resolve_feature_version(args, state)
     state.features = args.features
+    if args.pool_extra is not None:
+        state.fixed_pool = list(args.pool_extra)
 
     stages = default_stages(args.stage_fracs)
+    if args.opponent_mix:
+        stages[-1] = replace(stages[-1], name="league", mix=dict(args.opponent_mix))
     base_reward = RewardConfig()
     init_reward = replace(base_reward, shaping_scale=args.shaping_start)
 
@@ -250,7 +281,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         print(f"[train] run={args.run_name} seed={args.seed} envs={args.n_envs} ({'subproc' if args.subproc else 'dummy'}) "
               f"device={args.device} features={args.features} timesteps={args.timesteps:,} -> {ckpt_dir}", flush=True)
-        venv = make_vec_env(args, stages[state.stage_idx].mix, state.pool, init_reward)
+        if args.opponent_mix or args.pfsp or state.fixed_pool:
+            print(f"[train] league: mix={stages[-1].mix} pfsp={args.pfsp} fixed_pool={state.fixed_pool}", flush=True)
+        venv = make_vec_env(args, stages[state.stage_idx].mix, state.full_pool, init_reward)
 
         if args.resume:
             model = MaskablePPO.load(args.resume, env=venv, device=args.device, custom_objects={"learning_rate": lr, "seed": None})

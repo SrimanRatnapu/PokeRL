@@ -8,6 +8,12 @@ Opponents are described by string keys so the same mechanism works under both
     "random" | "maxpower" | "heuristic" | "simple_heuristic"   -> make_opponent(kind)
     "policy:<path/to/ckpt.zip>"                               -> make_opponent("policy", model=...)
     "pool"   (mix entry only)  -> sample a checkpoint from the self-play pool
+                                  (uniform with a recency bias, or PFSP: see below)
+
+PFSP (prioritized fictitious self-play, AlphaStar): with ``pfsp=True`` the pool
+checkpoint is drawn with weight (1 - p)^2, where p is our recent win rate against
+it, so training time goes to the opponents we still lose to. Win rates are
+exponentially decayed counts shared by all envs in the process (``PFSP_STATS``).
 
 Every episode-ending ``info`` dict gets ``info["opponent"] = <key>`` so win rates can be
 attributed to the exact opponent the battle was played against.
@@ -44,7 +50,29 @@ def opponent_kind(key: str | None) -> str:
 # Opponent construction (runs inside whichever process owns the env)
 # --------------------------------------------------------------------------- #
 _MODEL_CACHE: "OrderedDict[str, Any]" = OrderedDict()
-_MODEL_CACHE_CAP = 8
+_MODEL_CACHE_CAP = 32  # a league pool is ~25 checkpoints; each cached model is ~10 MB
+
+# PFSP: opponent key -> [decayed wins, decayed games]. Module-level so the envs of
+# one DummyVecEnv share it (each SubprocVecEnv worker keeps its own).
+PFSP_STATS: dict[str, list[float]] = {}
+PFSP_DECAY = 0.98  # ~50-game memory per opponent
+PFSP_FLOOR = 0.02  # never starve an opponent completely
+
+
+def pfsp_record(key: str, won: bool) -> None:
+    w, n = PFSP_STATS.get(key, (0.0, 0.0))
+    PFSP_STATS[key] = [w * PFSP_DECAY + float(won), n * PFSP_DECAY + 1.0]
+
+
+def pfsp_win_rate(key: str) -> tuple[float, float]:
+    """(Laplace-smoothed win rate, effective games) vs `key`; an unseen opponent is 0.5."""
+    w, n = PFSP_STATS.get(key, (0.0, 0.0))
+    return (w + 1.0) / (n + 2.0), n
+
+
+def pfsp_weight(key: str) -> float:
+    p, _ = pfsp_win_rate(key)
+    return max((1.0 - p) ** 2, PFSP_FLOOR)
 
 
 def load_policy_model(path: str):
@@ -85,7 +113,9 @@ class OpponentMixWrapper(gym.Wrapper):
         initial_player: Any = None,
         recent_k: int = 3,
         recent_prob: float = 0.5,
-        max_cached_policies: int = 6,
+        max_cached_policies: int = 12,
+        pfsp: bool = False,
+        pfsp_recent_prob: float = 0.25,
     ):
         super().__init__(env)
         self._rng = np.random.default_rng(seed)
@@ -94,6 +124,8 @@ class OpponentMixWrapper(gym.Wrapper):
         self._recent_k = recent_k
         self._recent_prob = recent_prob
         self._max_cached_policies = max_cached_policies
+        self._pfsp = pfsp
+        self._pfsp_recent_prob = pfsp_recent_prob
         self._players: "OrderedDict[str, Any]" = OrderedDict()
         if initial_player is not None:
             self._players[initial_key] = initial_player
@@ -112,6 +144,9 @@ class OpponentMixWrapper(gym.Wrapper):
     def current_opponent(self) -> str:
         return self._active_key
 
+    def pfsp_table(self) -> dict[str, tuple[float, float]]:
+        return {k: pfsp_win_rate(k) for k in PFSP_STATS}
+
     def action_masks(self) -> np.ndarray:
         return self.env.get_wrapper_attr("action_masks")()
 
@@ -125,6 +160,14 @@ class OpponentMixWrapper(gym.Wrapper):
         kind = keys[int(self._rng.choice(len(keys), p=p / p.sum()))]
         if kind != POOL:
             return kind
+        if self._pfsp:
+            # PFSP: a share of games vs the newest snapshots (the pool ends with them), the
+            # rest weighted toward the checkpoints we lose to.
+            if len(self._pool) > self._recent_k and self._rng.random() < self._pfsp_recent_prob:
+                candidates = self._pool[-self._recent_k:]
+                return POLICY_PREFIX + candidates[int(self._rng.integers(len(candidates)))]
+            w = np.asarray([pfsp_weight(POLICY_PREFIX + c) for c in self._pool], dtype=np.float64)
+            return POLICY_PREFIX + self._pool[int(self._rng.choice(len(self._pool), p=w / w.sum()))]
         # Recency-biased checkpoint choice: often the latest few, otherwise uniform.
         if len(self._pool) > self._recent_k and self._rng.random() < self._recent_prob:
             candidates = self._pool[-self._recent_k:]
@@ -163,6 +206,8 @@ class OpponentMixWrapper(gym.Wrapper):
         if terminated or truncated:
             info = dict(info)
             info["opponent"] = self._active_key
+            if info.get("won") is not None:
+                pfsp_record(self._active_key, bool(info["won"]))
         return obs, reward, terminated, truncated, info
 
 
@@ -174,6 +219,7 @@ def build_train_env(
     reward_config: RewardConfig,
     battle_format: str = BATTLE_FORMAT,
     feature_version: str = "v1",
+    pfsp: bool = False,
 ) -> gym.Env:
     """Env factory (module-level so it pickles for SubprocVecEnv).
 
@@ -186,7 +232,8 @@ def build_train_env(
     initial = make_opponent("random")
     env = make_env(opponent=initial, reward_config=replace(reward_config), battle_format=battle_format,
                    feature_version=feature_version)
-    return OpponentMixWrapper(env, mix=mix, pool=pool, seed=seed + 1000 * idx, initial_key="random", initial_player=initial)
+    return OpponentMixWrapper(env, mix=mix, pool=pool, seed=seed + 1000 * idx, initial_key="random",
+                              initial_player=initial, pfsp=pfsp)
 
 
 # --------------------------------------------------------------------------- #
@@ -203,6 +250,12 @@ class TrainState:
     num_timesteps: int = 0
     stage_history: list[dict] = field(default_factory=list)
     features: str | None = None  # observation feature version ("v1"/"v2"); None in pre-v2 state files
+    fixed_pool: list[str] = field(default_factory=list)  # league members that are never evicted (--pool-extra)
+
+    @property
+    def full_pool(self) -> list[str]:
+        """What the envs sample from: fixed league members first, then the rolling snapshots (newest last)."""
+        return list(self.fixed_pool) + list(self.pool)
 
     def save(self, path: Path) -> None:
         tmp = path.with_suffix(".json.tmp")
@@ -215,6 +268,7 @@ class TrainState:
         known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
         state = cls(**known)
         state.pool = [p for p in state.pool if Path(p).exists()]
+        state.fixed_pool = [p for p in state.fixed_pool if Path(p).exists()]
         return state
 
 
@@ -230,6 +284,8 @@ class Stage:
         return self.mix.get(POOL, 0) > 0
 
     def counts(self, key: str | None) -> bool:
+        if key and self.mix.get(key, 0) > 0:  # e.g. an explicit "policy:<path>" exploiter target
+            return True
         kind = opponent_kind(key)
         return (kind == "policy" and self.uses_pool) or self.mix.get(kind, 0) > 0
 
@@ -316,7 +372,7 @@ class CurriculumCallback(BaseCallback):
             path = self.ckpt_dir / f"pool_seed_{self.model.num_timesteps}.zip"
             self.model.save(path)
             self.state.pool.append(str(path))
-        self.training_env.env_method("set_opponent_mix", stage.mix, list(self.state.pool))
+        self.training_env.env_method("set_opponent_mix", stage.mix, self.state.full_pool)
         self.stage_results.clear()
         if record:
             self.state.stage_history.append({"stage": stage.name, "ts": self.model.num_timesteps, "reason": reason})
@@ -327,7 +383,7 @@ class CurriculumCallback(BaseCallback):
     def add_to_pool(self, path: str | Path) -> None:
         self.state.pool.append(str(path))
         self.state.pool = self.state.pool[-self.pool_size:]
-        self.training_env.env_method("set_opponent_pool", list(self.state.pool))
+        self.training_env.env_method("set_opponent_pool", self.state.full_pool)
 
     def _on_step(self) -> bool:
         dones = self.locals.get("dones")
@@ -479,8 +535,28 @@ class CheckpointEvalCallback(BaseCallback):
             self.curriculum.add_to_pool(path)
         self.save_state()
         if self.verbose:
-            print(f"[checkpoint] saved {path.name} (pool={len(self.state.pool)})", flush=True)
+            print(f"[checkpoint] saved {path.name} (pool={len(self.state.full_pool)})", flush=True)
+            self._print_pfsp()
         return path
+
+    def _print_pfsp(self) -> None:
+        try:
+            table = self.training_env.env_method("pfsp_table", indices=[0])[0]
+        except Exception:  # noqa: BLE001
+            return
+        own_dir = Path(self.ckpt_dir).resolve()
+
+        def is_snapshot(k: str) -> bool:  # our own rolling self-play snapshots (incl. evicted ones): too many to list
+            if not k.startswith(POLICY_PREFIX):
+                return False
+            p = Path(k[len(POLICY_PREFIX):])
+            return p.name.startswith(("step_", "pool_seed_")) and p.resolve().parent == own_dir
+
+        rows = [(k, p, n) for k, (p, n) in table.items() if n >= 1 and not is_snapshot(k)]
+        if rows:
+            short = lambda k: k[len(POLICY_PREFIX):].replace("checkpoints/", "") if k.startswith(POLICY_PREFIX) else k
+            print("[pfsp] win rate vs " + ", ".join(f"{short(k)} {p:.0%} (n={n:.0f})" for k, p, n in sorted(rows)),
+                  flush=True)
 
     def evaluate(self) -> float:
         if self.eval_env is None:
