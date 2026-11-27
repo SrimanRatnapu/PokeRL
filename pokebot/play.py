@@ -5,6 +5,7 @@ Examples (run from the project root, server running at localhost:8000):
     .venv/bin/python -m pokebot.play --model checkpoints/run1/final.zip --n-challenges 0 --verbose
     .venv/bin/python -m pokebot.play --model heuristic                      # no model needed
     .venv/bin/python -m pokebot.play --model ckpt.zip --challenge YourName  # bot challenges you
+    .venv/bin/python -m pokebot.play --model checkpoints/v5ft/final.zip --search-beta 100  # strongest bot (E10)
 
 By default the bot waits for challenges. Open http://localhost:8000, pick any
 name (no password with --no-security) and challenge the bot to
@@ -127,6 +128,15 @@ def build_bot(args: argparse.Namespace) -> Player:
 
     from pokebot.env import PolicyPlayer
 
+    if args.search_beta is not None:  # policy + one-turn lookahead (pokebot/search.py, E10)
+        from sb3_contrib import MaskablePPO
+
+        from pokebot.search import SearchPlayer
+
+        model = MaskablePPO.load(args.model, device="cpu", custom_objects={"seed": None})
+        cls = _with_reporting(SearchPlayer, args.verbose, model=model if args.verbose else None)
+        return cls(model=model, beta=args.search_beta, **common)
+
     if args.verbose:
         # Load the model ourselves so we can also inspect its action distribution.
         from sb3_contrib import MaskablePPO
@@ -219,9 +229,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--concurrency", type=int, default=1, help="max simultaneous battles (default 1)")
     p.add_argument("--save-replays", metavar="DIR", default=None, help="save replays (HTML) here")
     p.add_argument("--debug", action="store_true", help="verbose poke-env logging")
+    p.add_argument("--search-beta", type=float, default=None, metavar="B",
+                   help="play the checkpoint as policy + one-turn lookahead with weight B (100 = the "
+                        "lookahead decides, the policy breaks ties; see pokebot/search.py)")
     args = p.parse_args(argv)
     if not is_valid_spec(args.model):
         p.error(f"--model {args.model!r}: not a baseline name and no such checkpoint file")
+    if args.search_beta is not None and args.model in BASELINES:
+        p.error("--search-beta needs a checkpoint, not a baseline name")
     if len(args.username) > 18:
         p.error("--username must be at most 18 characters")
     if args.n_challenges < 0:

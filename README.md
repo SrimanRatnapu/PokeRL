@@ -18,7 +18,11 @@ The best model is **`checkpoints/champion.zip`**: v2 features, PPO from scratch,
 | SimpleHeuristicsPlayer | 70.6% [66.5, 74.4] |
 | first RL agent (v1, 3M steps), head-to-head | 65.2% [60.9, 69.2] |
 
-Play it with `.venv/bin/python -m pokebot.play --model checkpoints/champion.zip --verbose`. See
+**Strongest bot so far (E10): `checkpoints/v5ft/final.zip` + one-turn lookahead search** (`--search-beta 100`).
+It beats the champion **64.2%** [62.1, 66.3] over 2000 battles. The plain v5ft policy beats it 56.1%. Play it with
+`.venv/bin/python -m pokebot.play --model checkpoints/v5ft/final.zip --search-beta 100`.
+
+Play the champion with `.venv/bin/python -m pokebot.play --model checkpoints/champion.zip --verbose`. See
 `docs/MORNING_REPORT.md` for the summary and `docs/DECISIONS.md` for every experiment.
 
 ## Setup
@@ -55,7 +59,10 @@ Run every command from the project root with `.venv/bin/python`.
 
 ```
 bots/heuristic_bot.py   hand-written damage/matchup heuristic bot (baseline + example poke-env Player)
-bots/lookahead_bot.py   one-turn lookahead bot on the v2-v4 damage model (the strongest scripted opponent)
+bots/lookahead_bot.py   one-turn lookahead bot on the v2-v4 damage model, with tera and switch prediction
+                        (the strongest scripted opponent; `LookaheadScorer` is its scoring half)
+pokebot/search.py       policy + search: argmax log pi(a) + beta * lookahead(a) at decision time
+pokebot/features_v5.py  v5 features: v4 + the lookahead's score for every action -> 804 floats
 pokebot/config.py       shared constants: BATTLE_FORMAT, ACTION_SPACE_SIZE=26, RewardConfig, dirs
 pokebot/INTERFACE.md    module contract shared by all the pokebot modules
 pokebot/features.py     v1 features: embed_battle(battle) -> 226 floats (frozen; v1 checkpoints use it)
@@ -77,8 +84,8 @@ pokebot/train.py        MaskablePPO training: curriculum, reward annealing, self
 pokebot/evaluate.py     win rate + 95% CI against the baseline bots, checkpoint vs checkpoint
 pokebot/play.py         put the bot online so a human can challenge it (or have it challenge you)
 tests/                  pytest tests
-checkpoints/<run>/      saved models (created by training; only champion.zip, v2ft/v3ft finals and the
-                        v3/v4 warm starts are tracked in git)
+checkpoints/<run>/      saved models (created by training; champion.zip, the E7-E10 finals and the
+                        v3/v4/v5 warm starts are tracked in git)
 logs/<run>/             TensorBoard logs (created by training)
 ```
 
@@ -156,6 +163,23 @@ evals) is `scripts/run_e9.sh`; see docs/DECISIONS.md D22 and E9.
     --pool-extra checkpoints/champion.zip,checkpoints/v3ft/final.zip
 ```
 
+### Search: the lookahead inside the bot (E10)
+
+Policy + lookahead at β = 100 beats the champion 64–66%; v5 features beat the matched v4 run 54.4%.
+See docs/DECISIONS.md D23–D25 and E10.
+
+```bash
+# play a checkpoint as policy + one-turn lookahead (beta 0 = plain policy, large beta = pure lookahead)
+.venv/bin/python -m pokebot.evaluate --model checkpoints/v4ft/final.zip --search-beta 100 --opponents lookahead --battles 2000
+# v5 = v4 + the lookahead's score for each action, warm-started from v4_init (scripts/run_e10.sh)
+.venv/bin/python -m pokebot.surgery --src checkpoints/v4_init/init.zip --obs-size 804 --out checkpoints/v5_init/init.zip
+.venv/bin/python -m pokebot.train --run-name v5ft --features v5 --init-from checkpoints/v5_init/init.zip \
+    --start-stage 4 --lr 1e-4 --shaping-start 0.1 --shaping-end 0.1 --timesteps 2000000 --n-envs 4 --torch-threads 1
+```
+
+Lookahead variants for comparisons: `lookahead` (tera + switch prediction), `lookahead1` (the E9
+bot), `lookahead_tera`, `lookahead_switch`.
+
 ### TensorBoard
 
 ```bash
@@ -182,8 +206,10 @@ evals) is `scripts/run_e9.sh`; see docs/DECISIONS.md D22 and E9.
 Options: `--battles N` (per opponent, default 200), `--opponents a,b,...`,
 `--concurrency N` (default 10), `--save-replays DIR`, `--compare PATH2`, `--stochastic`
 (sample actions instead of always picking the most likely one). `--model` also accepts a
-baseline name (`random`, `maxpower`, `heuristic`, `simple_heuristic`, `lookahead`); `lookahead`
-is not in the default opponent list, so pass it with `--opponents`. The output table shows
+baseline name (`random`, `maxpower`, `heuristic`, `simple_heuristic`, `lookahead`, `lookahead1`,
+`lookahead_tera`, `lookahead_switch`); the lookahead bots are not in the default opponent list, so
+pass them with `--opponents`. `--search-beta B` / `--compare-search-beta B` play a checkpoint as
+policy + lookahead (`pokebot/search.py`). The output table shows
 wins/battles, win rate, a 95% Wilson confidence interval and the mean battle length in turns.
 
 ### Playing against the bot

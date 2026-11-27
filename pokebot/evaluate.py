@@ -26,7 +26,7 @@ from poke_env import AccountConfiguration
 from poke_env.player import MaxBasePowerPlayer, Player, RandomPlayer, SimpleHeuristicsPlayer
 
 from bots.heuristic_bot import HeuristicBot
-from bots.lookahead_bot import LookaheadBot
+from bots.lookahead_bot import LookaheadBot, LookaheadBotE9, LookaheadBotSwitch, LookaheadBotTera
 from pokebot.config import BATTLE_FORMAT
 
 # Baseline opponents, keyed by the names used in --opponents (same names as
@@ -37,6 +37,9 @@ BASELINES: dict[str, type[Player]] = {
     "heuristic": HeuristicBot,
     "simple_heuristic": SimpleHeuristicsPlayer,
     "lookahead": LookaheadBot,
+    "lookahead1": LookaheadBotE9,
+    "lookahead_tera": LookaheadBotTera,
+    "lookahead_switch": LookaheadBotSwitch,
 }
 DEFAULT_OPPONENTS = "random,maxpower,heuristic,simple_heuristic"
 
@@ -48,6 +51,9 @@ _NAME_PREFIX = {
     "heuristic": "EvHeuristic",
     "simple_heuristic": "EvSimpleHeur",
     "lookahead": "EvLookahead",
+    "lookahead1": "EvLook1",
+    "lookahead_tera": "EvLookTera",
+    "lookahead_switch": "EvLookSw",
 }
 
 
@@ -95,6 +101,7 @@ def build_player(
     deterministic: bool = True,
     save_replays: str | bool = False,
     log_level: int = logging.WARNING,
+    search_beta: float | None = None,
 ) -> Player:
     """Build a networked player from a spec.
 
@@ -110,6 +117,11 @@ def build_player(
     )
     if spec in BASELINES:
         return BASELINES[spec](**common)
+
+    if search_beta is not None:  # policy + one-turn lookahead (pokebot/search.py)
+        from pokebot.search import SearchPlayer
+
+        return SearchPlayer(model_path=spec, beta=search_beta, **common)
 
     # Imported lazily so the baseline modes work even before env.py exists.
     from pokebot.env import PolicyPlayer
@@ -215,6 +227,7 @@ async def main_async(args: argparse.Namespace) -> list[MatchResult]:
         deterministic=deterministic,
         save_replays=args.save_replays or False,
         log_level=agent_log_level,
+        search_beta=args.search_beta,
     )
     check_model_compat(agent, args.model)
 
@@ -232,6 +245,7 @@ async def main_async(args: argparse.Namespace) -> list[MatchResult]:
                 concurrency=args.concurrency,
                 deterministic=deterministic,
                 log_level=agent_log_level,
+                search_beta=args.compare_search_beta,
             )
             check_model_compat(other, args.compare)
             print(f"Playing {args.battles} battles: {args.model}  vs  {args.compare} ...", flush=True)
@@ -278,6 +292,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--compare", metavar="PATH2", default=None, help="pit --model against this second checkpoint")
     p.add_argument("--save-replays", metavar="DIR", default=None, help="save the agent's battle replays (HTML) here")
     p.add_argument("--stochastic", action="store_true", help="sample actions instead of argmax")
+    p.add_argument("--search-beta", type=float, default=None,
+                   help="play --model as policy + lookahead: argmax log pi(a) + BETA * lookahead(a) (pokebot/search.py)")
+    p.add_argument("--compare-search-beta", type=float, default=None, help="the same for --compare")
     p.add_argument("--debug", action="store_true", help="verbose poke-env logging")
     args = p.parse_args(argv)
     if args.battles < 1:
@@ -297,6 +314,16 @@ def is_valid_spec(spec: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        import torch
+
+        torch.set_num_threads(1)  # one battle decision at a time: more threads only heat the CPU
+    except ImportError:
+        pass
+    for flag, beta, spec in (("--search-beta", args.search_beta, args.model),
+                             ("--compare-search-beta", args.compare_search_beta, args.compare)):
+        if beta is not None and (spec is None or spec in BASELINES):
+            raise SystemExit(f"{flag} needs a checkpoint path, not {spec!r}")
     asyncio.run(main_async(args))
     return 0
 

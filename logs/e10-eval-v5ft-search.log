@@ -1,0 +1,9 @@
+checkpoints/v5ft/final.zip: feature set v5 (804 dims)
+Playing 2000 battles vs lookahead ...
+  -> 1006/2000 wins (50.3%), 160.7s
+
+Agent: checkpoints/v5ft/final.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+lookahead                              1006/2000     50.3%    [48.1%, 52.5%]    31.3     0  160.7s
+

@@ -22,7 +22,7 @@ def _bot():
 
 
 def _scores(bot, battle):
-    return {getattr(a, "species", getattr(a, "id", None)): v for v, a in bot.score_actions(battle)}
+    return {getattr(a, "species", getattr(a, "id", None)): v for v, a, _ in bot.score_actions(battle)}
 
 
 def test_factory_builds_it():

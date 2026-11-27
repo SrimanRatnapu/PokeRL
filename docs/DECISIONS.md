@@ -347,8 +347,94 @@ The E8 lesson was that the bot already beats its training opponents about 75% of
   - The lookahead bot is the one new thing that clearly works: a few hundred lines of search on the existing damage model play as well as 4M steps of PPO. That points to **search at decision time** (use the lookahead score as a prior, or let the policy pick among the lookahead's top actions) rather than more opponent engineering.
   - The exploiter would need to start from scratch or from a different model, train longer at a higher LR, and pass a "beats its target by 60%+" bar before it joins the pool.
 
+## Phase 7 — Search: putting the lookahead inside the bot
+
+### D23. A stronger lookahead: terastallization and opponent switches
+Two gaps in the E9 lookahead bot (`lookahead1`), both now in `bots/lookahead_bot.py`:
+1. **Tera.**
+   - Every move is also scored as "move + tera": the attacker's STAB and the defender's types change to the tera type.
+   - Tera can only be used once per game, so it costs `TERA_COST_PER_MON = 0.04` HP for each of our other living mons.
+   - **Bug found on the way:** poke-env leaves `Pokemon.tera_type` as `None` for our own mons until they terastallize, so at first the bot never picked tera (0 times in 200 battles). The real tera type is in the battle request; `our_tera_type()` reads it from there. After the fix the bot terastallizes about once per game.
+2. **Predicting the opponent's switch.**
+   - The candidate switch-ins are the opponent's revealed, healthy bench mons. The one that takes the least damage from our moves is their most likely switch.
+   - It counts only if it takes at least 0.15 HP less than their active mon. The switch probability rises with how badly their active mon is losing (a sigmoid, capped at 0.5).
+   - Each action's value is then `(1 − p) · stay + p · (value against the switch-in + 0.6 · stay)`.
+- `LookaheadScorer.action_scores(battle)` returns the value of every action in the 26-action space (NaN for unscored actions), so the RL code can use it too.
+- **Ablations, each against `lookahead1`, 2000 battles:**
+
+  | variant | win rate |
+  |---|---|
+  | tera + switch prediction (new `lookahead`) | **58.7%** |
+  | tera only | 56.8% |
+  | switch prediction only | 50.6% |
+
+  - Nearly all of the gain comes from tera. Switch prediction adds nothing on its own and about 2 points on top of tera, within noise. I kept it because it never hurt.
+  - Tuning was flat: `TERA_COST` 0 → 57.4%, 0.08 → 58.0%; `P_SWITCH_MAX` 0.3 → 58.0%, 0.7 → 59.8%. All within noise of the defaults.
+- **New lookahead strength (2000 battles):** it beats the champion **60.7%** [58.5, 62.8] and v4ft 58.8%, and simple_heuristic 71.5% (1000 battles). It is now clearly stronger than any RL model.
+
+### D24. Policy + search at decision time (`pokebot/search.py`)
+- For every legal action: `log π(a | s) + β · lookahead(a)`, then play the argmax.
+  - β = 0 is the plain policy. A very large β is the lookahead bot with the policy only breaking near-ties.
+  - This is the AlphaGo idea (learned prior + search) with a one-ply search.
+- `--search-beta B` in `pokebot.evaluate` (and `--compare-search-beta` for the other side of a head-to-head) and in `pokebot.play`.
+- **β sweep** (`scripts/e10_beta_sweep.sh`): v4ft + search, 2000 battles per cell.
+
+  | β | vs lookahead | vs champion |
+  |---|---|---|
+  | 0 (plain v4ft) | 39.1% | 52.1% |
+  | 0.5 | 42.2% | 54.5% |
+  | 1 | 41.2% | 57.3% |
+  | 2 | 43.5% | 58.9% |
+  | 4 | 49.6% | 61.7% |
+  | 8 | 48.8% | 63.7% |
+  | **100** | **52.5%** [50.4, 54.7] | **66.0%** [63.9, 68.0] |
+
+  - More search weight is better at every step. At this level, the policy mostly pulls the lookahead *down* when it disagrees.
+  - **But the policy is a good tie-breaker.** With β = 100, v4ft + search beats the champion 66.0%, against 60.7% for the lookahead alone. The lookahead often scores several actions almost equally (two safe switches, two similar attacks). Its own tie-break is arbitrary; the policy's isn't.
+  - `scripts/e10_pick_beta.py` picked β = 100 for the rest of E10.
+
+### D25. v5 features = v4 + the lookahead's verdict (`pokebot/features_v5.py`)
+- 52 new inputs (804 total), indexed like the action space:
+  - `score`: the lookahead's value of each action × 0.5, clipped to [−1, 1] (0 if illegal).
+  - `regret`: (score − best score) × 0.5, clipped to [−1, 0] (0 for the lookahead's pick, −1 if illegal).
+- The idea: the policy no longer has to rediscover one-turn tactics from a single win/loss per game. It can learn when to trust the search and when to overrule it.
+- Warm start: `checkpoints/v5_init/init.zip` is v4_init widened by surgery (D20). The new weights start at zero, so it plays exactly like v4_init (109/109 identical moves in the test). Scoring costs about 0.34 ms per state.
+
+### E10. Does search help, at decision time or as features? (run 2026-11-27, 12:12–15:28)
+- **Setup** (`scripts/e10_beta_sweep.sh`, then `scripts/run_e10.sh`; one job at a time, 4 in-process envs, 1 torch thread):
+  - The β sweep above (30 minutes).
+  - `v5ft`: 2M steps from v5_init. It is **matched to v4ft** (E8): same warm start, steps, LR schedule (1e-4 → 1e-5), shaping 0.1 and default stage-4 opponent mix. 2h24m at about 250 steps/s.
+  - Every eval and head-to-head is **2000 battles** (95% CI about ±2.2 points), up from 500.
+- **Evals** (win rate, 95% Wilson CI):
+
+  | model | random | maxpower | heuristic | simple_heuristic | lookahead |
+  |---|---|---|---|---|---|
+  | v5ft | 98.5% | 93.4% | 76.8% [75.0, 78.6] | **77.1%** [75.2, 78.9] | 41.2% [39.1, 43.4] |
+  | v4ft (matched control) | | | 76.3% [74.4, 78.1] | 74.2% [72.2, 76.1] | 40.5% [38.3, 42.6] |
+  | v5ft + search (β 100) | | | | | 50.3% [48.1, 52.5] |
+
+- **Head-to-heads (2000):**
+
+  | match | win rate |
+  |---|---|
+  | **v5ft vs v4ft** (the main test) | **54.4%** [52.2, 56.5] |
+  | v5ft vs champion | 56.1% [53.9, 58.3] (v4ft: 52.1%) |
+  | v5ft + search vs champion | 64.2% [62.1, 66.3] (v4ft + search: 66.0%) |
+  | v5ft + search vs v4ft + search | 49.0% [46.9, 51.2] |
+
+- **Verdict:**
+  1. **v5 features are the first feature set since v2 with a measurable gain.** v5ft beats its matched control 54.4% (z ≈ 3.9) and the champion 56.1%. It is the strongest plain policy so far.
+  2. **But the gain doesn't come from playing like the lookahead.** v5ft does no better against the lookahead bot than v4ft (41.2% vs 40.5%). It seems to use the scores as one more input rather than following them.
+  3. **Search at decision time is the big win.** Against the champion it takes v4ft from 52.1% to 66.0% and v5ft from 56.1% to 64.2%, above the lookahead bot alone (60.7%). With search on, v4ft and v5ft are indistinguishable (49.0%), because the lookahead makes nearly every decision.
+- **Strongest bot: `checkpoints/v5ft/final.zip` with `--search-beta 100`.** It ties v4ft + search, and if the lookahead ever fails it falls back to the stronger plain policy. `checkpoints/champion.zip` stays the E6 reference model, so earlier numbers remain comparable.
+- **RL lesson:**
+  - Four RL-only changes (v3, v4, league, more steps) moved nothing. Handing the policy the search's answers moved it a little, and running the search at decision time moved it a lot.
+  - In a game with this much hidden information, a hand-written one-ply model of damage and speed beats what PPO learned from win/loss alone in 4M steps. The policy's value now is the long-horizon judgement the lookahead lacks (it breaks ties well), not tactics.
+  - Next steps follow from that: a deeper search (two plies, or expectimax over the opponent's likely moves) with the policy as a prior on which branches to expand, or training the policy *with* search in the loop (expert iteration: imitate the search's choices, then search with the improved policy).
+
 ## Ideas for next time (not done)
-- ~~**Stronger opponents / league**~~: built and trained in E9 (D22): PFSP, a fixed strong pool, a lookahead bot and one exploiter. No measurable gain. Next: a stronger exploiter (see E9 lesson), or combine the lookahead search with the policy at decision time.
+- ~~**Search at decision time**~~: built and tested in E10 (D24, D25). Policy + lookahead beats the champion 64–66%; v5 features beat v4ft 54.4%. Next: **a deeper search** (two plies, or expectimax over the opponent's likely replies) with the policy as the prior on which branches to expand, and **expert iteration** (train the policy to imitate search + policy, then search with the new policy).
+- ~~**Stronger opponents / league**~~: built and trained in E9 (D22): PFSP, a fixed strong pool, a lookahead bot and one exploiter. No measurable gain. Next: a stronger exploiter (see E9 lesson). Self-play against search-enabled opponents is now possible too.
 - ~~Memory~~ and ~~items in the damage model~~: built as v3 (D19), trained in E7, no measurable gain. Next to try: a per-turn shared encoder for the history block, a longer v3 run, or a bigger network. Abilities: built as v4 (D21), trained in E8, also no measurable gain. Next: one-turn lookahead search using the damage model, or stronger/league opponents (see E8 lesson).
 - **Human replays for BC:** imitation helps most when the demonstrator is far stronger than what RL finds alone. Ladder replays would be a much better teacher than SimpleHeuristics.
 - **Bigger evals during training** (500 battles) or a moving average, to make `best.zip` trustworthy.

@@ -1,17 +1,26 @@
 """A one-turn lookahead bot: scores every legal action with the v2-v4 damage model.
 
-For each of our moves and each switch it estimates what happens this turn:
-who moves first (priority, speed incl. abilities/items/weather/Trick Room), how much
-each side loses, the chance of a KO on either side, and end-of-turn residual damage
-(sand, status, Leftovers, ... incl. a switch-in that changes the weather). The
-opponent is assumed to answer with its most damaging likely move (from the
-random-battle sets, over the posterior of its ability). On top of this turn's
-exchange it adds a discounted value for the matchup it leaves us in, so switching
-into a better matchup can beat attacking.
+For each of our moves (with and without Terastallization) and each switch it estimates
+what happens this turn: who moves first (priority, speed incl. abilities/items/weather/
+Trick Room), how much each side loses, the chance of a KO on either side, and end-of-turn
+residual damage (sand, status, Leftovers, ... incl. a switch-in that changes the weather).
+The opponent is assumed to answer with its most damaging likely move (from the
+random-battle sets, over the posterior of its ability). On top of this turn's exchange it
+adds a discounted value for the matchup it leaves us in, so switching into a better
+matchup can beat attacking.
 
-It never terastallizes and does not model the opponent switching. It is a training
-opponent and benchmark, stronger at tactics than SimpleHeuristicsPlayer: in the
-"Tyranitar's sand KOs a 2% Gyarados" position it sends Tyranitar.
+E10 additions (both on by default; `LookaheadBot(tera=False, predict_switch=False)` is the
+E9 bot, registered as the opponent `lookahead1`):
+  tera            score "move + terastallize" too: our types become the tera type (defence
+                  and STAB change), minus a cost for spending the once-per-game tera that
+                  shrinks as our team shrinks.
+  predict_switch  if their active is losing the matchup and they have a revealed bench mon
+                  that takes much less from us, assume they switch with some probability,
+                  and value each move partly by what it does to that switch-in (a move the
+                  switch-in is immune to loses value; setup and hazards gain).
+
+`action_scores(battle)` returns the score of every action index of the 26-action space
+(NaN for illegal ones). The policy+search blend (`pokebot.search`) and the v5 features use it.
 
 Run vs the scripted bots (Showdown server on localhost:8000):
     .venv/bin/python -m pokebot.evaluate --model lookahead --opponents simple_heuristic --battles 200
@@ -19,17 +28,27 @@ Run vs the scripted bots (Showdown server on localhost:8000):
 
 from __future__ import annotations
 
+import math
 import random
 from typing import List, Optional, Tuple
 
-from poke_env.battle import Battle, PokemonType, SideCondition
+import numpy as np
+from poke_env.battle import Battle, Pokemon, PokemonType, SideCondition
 from poke_env.player import Player
 
-from pokebot.features_v2 import Combatant, MoveInfo, move_info
-from pokebot.v4_abilities import _ACtx, _item, _known_ability, residual
+from pokebot.config import ACTION_SPACE_SIZE
+from pokebot.features_v2 import _TYPE_INDEX, Combatant, MoveInfo, move_info
+from pokebot.v3_items import estimate_damage_items
+from pokebot.v4_abilities import (_MOLD, _ACtx, _item, _known_ability, _opp_item, ability_damage,
+                                  ability_posterior, nullifies, residual)
 
 W_KO = 0.6  # value of knocking a mon out, on top of the HP it had (units: a full-HP mon = 1.0)
 GAMMA = 0.6  # weight of the matchup we are left in, relative to this turn's exchange
+TERA_COST_PER_MON = 0.04  # cost of spending tera, per mon we still have (saving it matters less late)
+P_SWITCH_MAX = 0.5  # most we ever believe they switch
+SWITCH_MARGIN = 0.25  # how far (in HP units) they must be losing the damage race before switching gets likely
+SWITCH_SCALE = 0.1
+SWITCH_BETTER = 0.15  # their switch-in must take at least this much less from us than their active
 
 _STATUS_IMMUNE = {
     "willowisp": (PokemonType.FIRE,),
@@ -44,51 +63,176 @@ _STATUS_IMMUNE = {
 _ROCK = move_info("stealthrock")
 
 
-class LookaheadBot(Player):
-    """Greedy one-turn search over our actions with the feature damage model."""
+def _with_tera(c: Combatant, t) -> Optional[Combatant]:
+    """A copy of our combatant after terastallizing into type `t` (None if `t` is not a normal type)."""
+    if t not in _TYPE_INDEX:
+        return None
+    n = object.__new__(Combatant)
+    for s in Combatant.__slots__:
+        setattr(n, s, getattr(c, s))
+    n.types = [t]
+    n.tera = t
+    n._eff = {}
+    return n
 
-    def __init__(self, *args, epsilon: float = 0.0, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.epsilon = epsilon  # chance to play the second-best action (diversity as a training opponent)
 
-    # ------------------------------------------------------------------ #
-    def choose_move(self, battle):
-        if not isinstance(battle, Battle):
-            return self.choose_random_move(battle)
+def our_tera_type(mon):
+    """Our mon's tera type. poke-env leaves `tera_type` empty until we tera, so read Showdown's request."""
+    t = mon.tera_type
+    if t is not None:
+        return t
+    req = getattr(mon, "_last_request", None) or {}
+    name = req.get("teraType")
+    if not name:
+        return None
+    try:
+        return PokemonType.from_name(name)
+    except Exception:
+        return None
+
+
+def move_list_for_actions(battle: Battle) -> list:
+    """The move list that actions 6-9 / 22-25 index into (same rule as SinglesEnv.action_to_order)."""
+    me = battle.active_pokemon
+    if me is None:
+        return []
+    avail = list(battle.available_moves or [])
+    known = list(me.moves.values())[:4]
+    known_ids = [m.id for m in known]
+    if len(avail) == 1 and avail[0].id not in known_ids:
+        return avail
+    return known
+
+
+class LookaheadScorer:
+    """The scoring half of the bot, usable without a Showdown connection (search blend, v5 features)."""
+
+    def __init__(self, tera: bool = True, predict_switch: bool = True):
+        self.tera = tera
+        self.predict_switch = predict_switch
+
+    def action_scores(self, battle: Battle) -> np.ndarray:
+        """Score per action index (0-5 switch to team slot, 6-9 move, 22-25 move + tera); NaN = not scored."""
+        out = np.full(ACTION_SPACE_SIZE, np.nan, dtype=np.float64)
         try:
             scored = self.score_actions(battle)
-        except Exception:  # never crash a battle over a model gap
-            scored = []
-        if not scored:
-            return self.choose_random_move(battle)
-        scored.sort(key=lambda t: t[0], reverse=True)
-        pick = scored[1] if (len(scored) > 1 and self.epsilon > 0 and random.random() < self.epsilon) else scored[0]
-        return self.create_order(pick[1])
+        except Exception:
+            return out
+        team = list(battle.team.values())
+        mvs = move_list_for_actions(battle)
+        ids = [m.id for m in mvs]
+        for v, obj, tera in scored:
+            if isinstance(obj, Pokemon):
+                for i, m in enumerate(team):
+                    if m is obj:
+                        out[i] = v
+            else:
+                mid = getattr(obj, "id", None)
+                for i, x in enumerate(ids[:4]):
+                    if x == mid:
+                        out[(22 if tera else 6) + i] = v
+        return out
 
-    def score_actions(self, battle: Battle) -> List[Tuple[float, object]]:
-        """[(value, Move | Pokemon)] for every legal action this turn."""
+    def score_actions(self, battle: Battle) -> List[Tuple[float, object, bool]]:
+        """[(value, Move | Pokemon, terastallize)] for every legal action this turn."""
         ac = _ACtx(battle)
         v2 = ac.v2
         moves = list(battle.available_moves or [])
         switches = list(battle.available_switches or [])
         if v2.opp_c is None:  # nothing to plan against yet: strongest-looking move or first switch
             if moves:
-                return [(m.base_power * m.accuracy if m.accuracy is not True else m.base_power, m) for m in moves]
-            return [(0.0, s) for s in switches]
+                return [(m.base_power * m.accuracy if m.accuracy is not True else m.base_power, m, False)
+                        for m in moves]
+            return [(0.0, s, False) for s in switches]
         forced = bool(battle.force_switch) or v2.me_c is None
-        out: List[Tuple[float, object]] = []
-        if not forced and v2.me_c is not None:
+        out: List[Tuple[float, object, bool]] = []
+        if not forced and v2.me_c is not None and moves:
             me_ab, me_item = ac.me_ab, ac.me_item
-            stay = self._matchup(ac, battle, v2.me_c, me_ab, me_item, v2.me, ac.weather)
-            for mv in moves:
-                mi = move_info(mv)
-                gain, p_survive = self._exchange(ac, battle, v2.me_c, me_ab, me_item, mi, ac.weather)
-                out.append((gain + GAMMA * p_survive * stay, mv))
+            variants = [(v2.me_c, False, 0.0)]
+            if self.tera and battle.can_tera and v2.me is not None:
+                tc = _with_tera(v2.me_c, our_tera_type(v2.me))
+                if tc is not None:
+                    alive = sum(1 for m in battle.team.values() if not m.fainted)
+                    variants.append((tc, True, TERA_COST_PER_MON * max(alive - 1, 0)))
+            sw = self._switch_guess(ac, battle, v2.me_c, me_ab, me_item, moves) if self.predict_switch else None
+            for me, tera, cost in variants:
+                stay = self._matchup(ac, battle, me, me_ab, me_item, v2.me, ac.weather)
+                for mv in moves:
+                    mi = move_info(mv)
+                    gain, p_survive = self._exchange(ac, battle, me, me_ab, me_item, mi, ac.weather)
+                    v = gain + GAMMA * p_survive * stay
+                    if sw is not None:
+                        p_sw, target = sw
+                        v = (1 - p_sw) * v + p_sw * (self._vs_switch_in(ac, battle, me, me_ab, me_item, mi, target)
+                                                     + GAMMA * stay)
+                    out.append((v - cost, mv, tera))
         for mon in switches:
-            out.append((self._switch_value(ac, battle, mon, forced), mon))
+            out.append((self._switch_value(ac, battle, mon, forced), mon, False))
         return out
 
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _ours_vs(ac: _ACtx, mi: MoveInfo, me: Combatant, me_ab, me_item, tc: Combatant, tpost, titem
+                 ) -> Tuple[float, float]:
+        """(expected damage as a fraction of tc's current HP, P(KO)) of our move vs any of their mons."""
+        base = estimate_damage_items(mi, me, tc, ac.weather, att_item=me_item, dfn_item=titem)
+        if base <= 0.0:
+            return 0.0, 0.0
+        exp = p_ko = 0.0
+        for a, p in (tpost or ((None, 1.0),)):
+            if me_ab not in _MOLD and nullifies(a, mi, me_ab):
+                continue
+            d, ko = ability_damage(base, mi, me, tc, me_ab, a, ac.weather, ac.terrain)
+            exp += p * min(d, 1.0)
+            p_ko += p * float(ko)
+        return exp, p_ko
+
+    def _switch_guess(self, ac: _ACtx, battle: Battle, me: Combatant, me_ab, me_item, moves):
+        """(P(they switch this turn), (combatant, posterior, item) of the likely switch-in) or None."""
+        v2 = ac.v2
+        opp = v2.opp_c
+        infos = [mi for mi in (move_info(m) for m in moves) if mi is not None and not mi.status]
+        if not infos:
+            return None
+        bench = [m for m in (battle.opponent_team or {}).values() if not m.fainted and not m.active]
+        if not bench:
+            return None
+
+        def taken(tc, tpost, titem) -> float:
+            best = 0.0
+            for mi in infos:
+                exp, ko = self._ours_vs(ac, mi, me, me_ab, me_item, tc, tpost, titem)
+                best = max(best, mi.acc * (min(exp, 1.0) * tc.hp_frac + W_KO * ko))
+            return best
+
+        ours_now = taken(opp, ac.opp_post, ac.opp_item)
+        threat, threat_ko, _ = ac.opp_vs(me, me_ab, me_item, ac.weather)
+        theirs_now = min(threat, 1.0) * me.hp_frac + W_KO * threat_ko
+        best_t, best_taken = None, None
+        for m in bench:
+            tc = v2.combatant(m, False)
+            t = (tc, ability_posterior(m), _opp_item(m))
+            x = taken(*t)
+            if best_taken is None or x < best_taken:
+                best_t, best_taken = t, x
+        if best_t is None or best_taken > ours_now - SWITCH_BETTER:
+            return None
+        z = (ours_now - theirs_now - SWITCH_MARGIN) / SWITCH_SCALE
+        p = P_SWITCH_MAX / (1.0 + math.exp(-max(min(z, 30.0), -30.0)))
+        return (p, best_t) if p > 0.01 else None
+
+    def _vs_switch_in(self, ac: _ACtx, battle: Battle, me: Combatant, me_ab, me_item, mi: Optional[MoveInfo],
+                      target) -> float:
+        """Value of `mi` if they switch: it hits the switch-in, and nobody attacks us this turn."""
+        tc, tpost, titem = target
+        r_me = residual(me, me_ab, me_item, ac.weather, ac.terrain)
+        if mi is None:
+            return r_me
+        if mi.status:
+            return self._status_value(ac, battle, me, mi, 0.0) + r_me
+        exp, ko = self._ours_vs(ac, mi, me, me_ab, me_item, tc, tpost, titem)
+        return mi.acc * (min(exp, 1.0) * tc.hp_frac + W_KO * ko) + r_me
+
     def _exchange(self, ac: _ACtx, battle: Battle, me: Combatant, me_ab, me_item, mi: Optional[MoveInfo],
                   weather) -> Tuple[float, float]:
         """(expected value of using `mi` this turn, P(our mon survives the turn))."""
@@ -196,4 +340,53 @@ class LookaheadBot(Player):
         return d
 
 
-__all__ = ["LookaheadBot"]
+class LookaheadBot(Player, LookaheadScorer):
+    """Greedy one-turn search over our actions with the feature damage model."""
+
+    def __init__(self, *args, epsilon: float = 0.0, tera: bool = True, predict_switch: bool = True, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.epsilon = epsilon  # chance to play the second-best action (diversity as a training opponent)
+        self.tera = tera
+        self.predict_switch = predict_switch
+
+    # ------------------------------------------------------------------ #
+    def choose_move(self, battle):
+        if not isinstance(battle, Battle):
+            return self.choose_random_move(battle)
+        try:
+            scored = self.score_actions(battle)
+        except Exception:  # never crash a battle over a model gap
+            scored = []
+        if not scored:
+            return self.choose_random_move(battle)
+        scored.sort(key=lambda t: t[0], reverse=True)
+        pick = scored[1] if (len(scored) > 1 and self.epsilon > 0 and random.random() < self.epsilon) else scored[0]
+        return self.create_order(pick[1], terastallize=pick[2])
+
+
+class LookaheadBotE9(LookaheadBot):
+    """The E9 lookahead bot: no tera, no switch prediction (opponent name `lookahead1`)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("tera", False)
+        kwargs.setdefault("predict_switch", False)
+        super().__init__(*args, **kwargs)
+
+
+class LookaheadBotTera(LookaheadBot):
+    """Ablation: tera on, switch prediction off (opponent name `lookahead_tera`)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("predict_switch", False)
+        super().__init__(*args, **kwargs)
+
+
+class LookaheadBotSwitch(LookaheadBot):
+    """Ablation: switch prediction on, tera off (opponent name `lookahead_switch`)."""
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("tera", False)
+        super().__init__(*args, **kwargs)
+
+
+__all__ = ["our_tera_type", "LookaheadScorer", "LookaheadBot", "LookaheadBotE9", "LookaheadBotTera", "LookaheadBotSwitch", "move_list_for_actions"]

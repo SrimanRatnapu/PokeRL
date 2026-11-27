@@ -1,0 +1,11 @@
+picked BETA=100
+[12:42:17] E10 start (BETA=100)
+[12:42:17] train v5ft (2M)
+[15:06:07] train exit 0
+[15:06:07] eval v5ft vs bots (2000 each)
+[15:12:49] eval v4ft vs bots (2000 each)
+[15:15:52] h2h v5ft vs v4ft (matched control)
+[15:18:01] h2h v5ft vs champion
+[15:19:50] v5ft + search (beta 100) vs lookahead and champion
+[15:24:55] h2h v5ft + search vs v4ft + search (both beta 100)
+[15:28:27] E10 done

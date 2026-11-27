@@ -1,0 +1,39 @@
+checkpoints/v4ft/final.zip: feature set v4 (752 dims)
+Playing 2000 battles vs heuristic ...
+  -> 1526/2000 wins (76.3%), 41.8s
+Playing 2000 battles vs simple_heuristic ...
+  -> 1484/2000 wins (74.2%), 43.9s
+Playing 2000 battles vs lookahead ...
+2026-11-27 15:14:30,808 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 500 turns (on turn 1000)."]
+2026-11-27 15:14:31,999 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 400 turns (on turn 1000)."]
+2026-11-27 15:14:33,185 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 300 turns (on turn 1000)."]
+2026-11-27 15:14:35,304 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 200 turns (on turn 1000)."]
+2026-11-27 15:14:36,522 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 100 turns (on turn 1000)."]
+2026-11-27 15:14:36,637 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 90 turns (on turn 1000)."]
+2026-11-27 15:14:36,762 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 80 turns (on turn 1000)."]
+2026-11-27 15:14:36,879 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 70 turns (on turn 1000)."]
+2026-11-27 15:14:36,997 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 60 turns (on turn 1000)."]
+2026-11-27 15:14:37,123 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 50 turns (on turn 1000)."]
+2026-11-27 15:14:37,249 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 40 turns (on turn 1000)."]
+2026-11-27 15:14:37,372 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 30 turns (on turn 1000)."]
+2026-11-27 15:14:37,487 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 20 turns (on turn 1000)."]
+2026-11-27 15:14:37,614 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 10 turns (on turn 1000)."]
+2026-11-27 15:14:37,626 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 9 turns (on turn 1000)."]
+2026-11-27 15:14:37,641 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 8 turns (on turn 1000)."]
+2026-11-27 15:14:37,652 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 7 turns (on turn 1000)."]
+2026-11-27 15:14:37,663 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 6 turns (on turn 1000)."]
+2026-11-27 15:14:37,674 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 5 turns (on turn 1000)."]
+2026-11-27 15:14:37,687 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 4 turns (on turn 1000)."]
+2026-11-27 15:14:37,699 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 3 turns (on turn 1000)."]
+2026-11-27 15:14:37,715 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 2 turns (on turn 1000)."]
+2026-11-27 15:14:37,728 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 1 turn (on turn 1000)."]
+2026-11-27 15:14:37,739 - EvAgent ff22t - WARNING - Received 'bigerror' message: ['', 'bigerror', "You will auto-tie if the battle doesn't end in 0 turns (on turn 1000)."]
+  -> 809/2000 wins (40.5%), 93.2s
+
+Agent: checkpoints/v4ft/final.zip   format: gen9randombattle
+opponent                            wins/battles  win rate   95% CI (Wilson)   turns  ties    time
+--------------------------------------------------------------------------------------------------
+heuristic                              1526/2000     76.3%    [74.4%, 78.1%]    18.0     0   41.8s
+simple_heuristic                       1484/2000     74.2%    [72.2%, 76.1%]    18.4     0   43.9s
+lookahead                               809/2000     40.5%    [38.3%, 42.6%]    29.1     1   93.2s
+

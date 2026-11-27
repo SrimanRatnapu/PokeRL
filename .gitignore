@@ -38,3 +38,7 @@ replays/
 !checkpoints/league/phase_a.zip
 !checkpoints/exploiter/
 !checkpoints/exploiter/final.zip
+!checkpoints/v5_init/
+!checkpoints/v5_init/init.zip
+!checkpoints/v5ft/
+!checkpoints/v5ft/final.zip

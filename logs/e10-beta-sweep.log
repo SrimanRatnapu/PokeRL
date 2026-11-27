@@ -1,0 +1,17 @@
+lookahead (new) vs champion: compare: checkpoints/champion.zip      1213/2000     60.7%    [58.5%, 62.8%]    27.5     0   69.6s
+lookahead (new) vs v4ft:     compare: checkpoints/v4ft/final.zip     1175/2000     58.8%    [56.6%, 60.9%]    28.6     0   94.3s
+beta=0 vs lookahead: lookahead                               783/2000     39.1%    [37.0%, 41.3%]    28.6     0  120.4s
+beta=0 vs champion:  compare: checkpoints/champion.zip      1043/2000     52.1%    [50.0%, 54.3%]    24.9     0  102.1s
+beta=0.5 vs lookahead: lookahead                               845/2000     42.2%    [40.1%, 44.4%]    29.1     1  121.2s
+beta=0.5 vs champion:  compare: checkpoints/champion.zip      1091/2000     54.5%    [52.4%, 56.7%]    25.1     1  100.8s
+beta=1 vs lookahead: lookahead                               825/2000     41.2%    [39.1%, 43.4%]    28.4     0  117.9s
+beta=1 vs champion:  compare: checkpoints/champion.zip      1146/2000     57.3%    [55.1%, 59.5%]    25.0     0  101.4s
+beta=2 vs lookahead: lookahead                               870/2000     43.5%    [41.3%, 45.7%]    28.7     0  118.1s
+beta=2 vs champion:  compare: checkpoints/champion.zip      1178/2000     58.9%    [56.7%, 61.0%]    24.9     0  101.2s
+beta=4 vs lookahead: lookahead                               993/2000     49.6%    [47.5%, 51.8%]    28.2     0  117.2s
+beta=4 vs champion:  compare: checkpoints/champion.zip      1233/2000     61.7%    [59.5%, 63.8%]    24.9     0  101.4s
+beta=8 vs lookahead: lookahead                               976/2000     48.8%    [46.6%, 51.0%]    29.6     1  122.1s
+beta=8 vs champion:  compare: checkpoints/champion.zip      1275/2000     63.7%    [61.6%, 65.8%]    25.1     0  103.2s
+beta=100 vs lookahead: lookahead                              1051/2000     52.5%    [50.4%, 54.7%]    31.2     0  128.6s
+beta=100 vs champion:  compare: checkpoints/champion.zip      1320/2000     66.0%    [63.9%, 68.0%]    28.2     1  113.2s
+done
