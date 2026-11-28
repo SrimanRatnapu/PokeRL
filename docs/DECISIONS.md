@@ -85,6 +85,7 @@ A running record of every significant design decision, experiment, and result in
 ## Phase 3 — Results & experiments
 
 ### E1. First real run (v1): 1M steps, 4 envs, 32 minutes
+- **Figure:** [03_from_scratch_runs.png](figures/03_from_scratch_runs.png) (curriculum stages and eval curve of v1, v2 and v2+BC).
 - Stage 1 (random) cleared at 39k steps (85% threshold); stage 2 (max-power) at 117k (70%); stage 3 (heuristics) ran until the forced switch at 500k; then self-play.
 - Eval vs SimpleHeuristics (50 battles each) bounced 22% → 58%.
 - **Proper eval (300 battles/opponent):** `final.zip`: 99% vs random, 86% vs max-power, 45% vs our HeuristicBot, 49% vs SimpleHeuristics. `best.zip` (the "58%" checkpoint) scored only 46% on 300 battles.
@@ -144,6 +145,7 @@ A running record of every significant design decision, experiment, and result in
 - 2M steps of warm-started training beat 3M steps from scratch. Took 75.6 min (442 steps/s — v2 features are slightly slower to compute and battles vs heuristic opponents are slower than vs random).
 
 ### E5. Ablation: v2 features from scratch (no BC), 1M steps
+- **Figure:** [03_from_scratch_runs.png](figures/03_from_scratch_runs.png).
 - **Why:** E4 changed two things at once (v2 features *and* BC warm start). To learn which one mattered, change one variable at a time. Compare against v1 at 1M (≈49% vs SimpleHeuristics on 300 battles).
 - **RL concept:** *ablation study* — the standard way to attribute gains in ML research.
 - **Result (500 battles/opponent):** `v2scratch/final.zip` @1M = 91.2% max-power, **68.8% HeuristicBot, 64.2% SimpleHeuristics**, **59.0% vs v1-3M**, and **49.0% vs v2bc-2M (a tie)**. Curriculum stages cleared faster than v1 (stage 3 → self-play by win-rate threshold at 392k; v1 never hit that threshold and was force-advanced at 500k).
@@ -158,6 +160,7 @@ A running record of every significant design decision, experiment, and result in
 - Took 114 minutes (439 steps/s average) at the agreed CPU budget (4 in-process envs).
 
 ### E6. Final results: v2 from scratch, 4M steps → `checkpoints/champion.zip`
+- **Figure:** [01_champion_curriculum.png](figures/01_champion_curriculum.png) (win rates through the curriculum), [02_champion_ppo_diagnostics.png](figures/02_champion_ppo_diagnostics.png) (PPO losses, KL, entropy, schedules), [06_progress_vs_scripted_bots.png](figures/06_progress_vs_scripted_bots.png).
 - 200-battle evals vs SimpleHeuristics during 1M→4M sat in a noisy 57–72% band and drifted up slowly (mostly 60–64% before 2.5M, mostly 66–72% after 3M).
 - **500-battle results:**
 
@@ -214,6 +217,7 @@ A running record of every significant design decision, experiment, and result in
 - **RL concept:** *function-preserving expansion (Net2Net)*, the same idea as growing a model mid-training instead of starting over.
 
 ### E7. Does v3 actually help? (run 2026-11-20, 17:00–19:55)
+- **Figure:** [04_finetune_runs.png](figures/04_finetune_runs.png) (all E7-E10 fine-tunes), [07_head_to_heads.png](figures/07_head_to_heads.png).
 - **Treatment:** fine-tune the widened champion with v3 features for 2M steps.
   ```bash
   .venv/bin/python -m pokebot.train --run-name v3ft --features v3 --init-from checkpoints/v3_init/init.zip \
@@ -264,6 +268,7 @@ A running record of every significant design decision, experiment, and result in
 - **RL lesson / expectation:** E7 says a feature only helps if it changes the best action often enough for the win/loss signal to notice it. Weather-chip KOs on switch-in are rare. Immunities (switching a Levitate mon into Earthquake), Intimidate and residual damage come up far more often, and those are where any measurable gain should come from.
 
 ### E8. Does v4 help? (run 2026-11-27, 01:05–03:35)
+- **Figure:** [04_finetune_runs.png](figures/04_finetune_runs.png).
 - **Setup:**
   - Treatment `v4ft`: `--features v4 --init-from checkpoints/v4_init/init.zip`.
   - Control `v3ft2`: `--features v3 --init-from checkpoints/v3ft/final.zip`, so "2M more steps" isn't mistaken for "abilities".
@@ -317,6 +322,7 @@ The E8 lesson was that the bot already beats its training opponents about 75% of
 - **LR schedule matched to v4ft:** phase A runs `--lr 1e-4 --lr-final-frac 0.55` over 1M (1e-4 → 5.5e-5). Phase B resumes with `--lr-final-frac 0.1`; SB3 counts progress over the combined 2M steps, so it continues 5.5e-5 → 1e-5. That is v4ft's 2M schedule exactly.
 
 ### E9. Does league training help? (run 2026-11-27, 03:51–06:03)
+- **Figure:** [05_league_training.png](figures/05_league_training.png) (win rate by opponent type, exploiter).
 - **Setup** (`scripts/run_e9.sh`, one job at a time, 4 in-process envs, 1 torch thread, about one core):
   - Phase A: `league`, 1M steps from `checkpoints/v4_init/init.zip` (51 min).
   - Exploiter: 500k steps from phase A against phase A (26 min).
@@ -350,6 +356,7 @@ The E8 lesson was that the bot already beats its training opponents about 75% of
 ## Phase 7 — Search: putting the lookahead inside the bot
 
 ### D23. A stronger lookahead: terastallization and opponent switches
+- **Figure:** [09_lookahead_ablation.png](figures/09_lookahead_ablation.png).
 Two gaps in the E9 lookahead bot (`lookahead1`), both now in `bots/lookahead_bot.py`:
 1. **Tera.**
    - Every move is also scored as "move + tera": the attacker's STAB and the defender's types change to the tera type.
@@ -373,6 +380,7 @@ Two gaps in the E9 lookahead bot (`lookahead1`), both now in `bots/lookahead_bot
 - **New lookahead strength (2000 battles):** it beats the champion **60.7%** [58.5, 62.8] and v4ft 58.8%, and simple_heuristic 71.5% (1000 battles). It is now clearly stronger than any RL model.
 
 ### D24. Policy + search at decision time (`pokebot/search.py`)
+- **Figure:** [08_search_beta_sweep.png](figures/08_search_beta_sweep.png).
 - For every legal action: `log π(a | s) + β · lookahead(a)`, then play the argmax.
   - β = 0 is the plain policy. A very large β is the lookahead bot with the policy only breaking near-ties.
   - This is the AlphaGo idea (learned prior + search) with a one-ply search.
@@ -401,6 +409,7 @@ Two gaps in the E9 lookahead bot (`lookahead1`), both now in `bots/lookahead_bot
 - Warm start: `checkpoints/v5_init/init.zip` is v4_init widened by surgery (D20). The new weights start at zero, so it plays exactly like v4_init (109/109 identical moves in the test). Scoring costs about 0.34 ms per state.
 
 ### E10. Does search help, at decision time or as features? (run 2026-11-27, 12:12–15:28)
+- **Figure:** [00_headline_vs_champion.png](figures/00_headline_vs_champion.png), [04_finetune_runs.png](figures/04_finetune_runs.png), [11_v5ft_ppo_diagnostics.png](figures/11_v5ft_ppo_diagnostics.png).
 - **Setup** (`scripts/e10_beta_sweep.sh`, then `scripts/run_e10.sh`; one job at a time, 4 in-process envs, 1 torch thread):
   - The β sweep above (30 minutes).
   - `v5ft`: 2M steps from v5_init. It is **matched to v4ft** (E8): same warm start, steps, LR schedule (1e-4 → 1e-5), shaping 0.1 and default stage-4 opponent mix. 2h24m at about 250 steps/s.

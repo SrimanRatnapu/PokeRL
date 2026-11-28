@@ -8,7 +8,14 @@ in your browser.
 
 ## Results
 
-The best model is **`checkpoints/champion.zip`**: v2 features, PPO from scratch, 4M steps (about 2.5 hours of training on 4 in-process envs). Over 500 battles per opponent:
+![Headline: win rate against the champion](docs/figures/00_headline_vs_champion.png)
+
+**Strongest bot (E10): `checkpoints/v5ft/final.zip` + one-turn lookahead search** (`--search-beta 100`).
+It beats the previous champion **64.2%** [62.1, 66.3] over 2000 battles; the plain v5ft policy beats it 56.1%.
+Play it with `.venv/bin/python -m pokebot.play --model checkpoints/v5ft/final.zip --search-beta 100`.
+
+**The champion** (`checkpoints/champion.zip`, the reference model for every head-to-head): v2 features,
+PPO from scratch, 4M steps (about 2.5 hours of training on 4 in-process envs). Over 500 battles per opponent:
 
 | opponent | win rate (95% CI) |
 |---|---|
@@ -18,12 +25,41 @@ The best model is **`checkpoints/champion.zip`**: v2 features, PPO from scratch,
 | SimpleHeuristicsPlayer | 70.6% [66.5, 74.4] |
 | first RL agent (v1, 3M steps), head-to-head | 65.2% [60.9, 69.2] |
 
-**Strongest bot so far (E10): `checkpoints/v5ft/final.zip` + one-turn lookahead search** (`--search-beta 100`).
-It beats the champion **64.2%** [62.1, 66.3] over 2000 battles. The plain v5ft policy beats it 56.1%. Play it with
-`.venv/bin/python -m pokebot.play --model checkpoints/v5ft/final.zip --search-beta 100`.
+Play it with `.venv/bin/python -m pokebot.play --model checkpoints/champion.zip --verbose`.
 
-Play the champion with `.venv/bin/python -m pokebot.play --model checkpoints/champion.zip --verbose`. See
-`docs/MORNING_REPORT.md` for the summary and `docs/DECISIONS.md` for every experiment.
+**What mattered, in order** (details and every number in `docs/DECISIONS.md`):
+1. **Search at decision time** (E10): +8 to +14 points against the champion, on top of any trained policy.
+2. **Better input features** (v2, E5): +15 points against SimpleHeuristics at equal steps, the biggest gain from RL alone.
+3. **More self-play** (E6): +6 points from 1M to 4M steps.
+4. **The search's scores as inputs** (v5, E10): +4 points over a matched control.
+5. Behaviour cloning (E4), items/crits/memory (v3, E7), abilities (v4, E8) and league training (E9):
+   no measurable gain at the ceiling, each tested against a matched control.
+
+## Figures
+
+All figures are rebuilt from the training logs by `scripts/make_figures.py`. Their data is committed in
+`results/`: the TensorBoard curves of every run as CSV, and every evaluation with its source log.
+
+| | |
+|---|---|
+| ![](docs/figures/01_champion_curriculum.png) | ![](docs/figures/02_champion_ppo_diagnostics.png) |
+| **1. Champion run through the curriculum.** Training win rate against each opponent type (last 200 games) through the four stages, and the 200-battle eval against SimpleHeuristics with its 95% CI. | **2. PPO diagnostics of the champion run.** Return, episode length, entropy, value and policy losses, explained variance, KL, clip fraction, LR and shaping schedules. The jump at 1M is the resume with a re-warmed LR (D18). |
+| ![](docs/figures/03_from_scratch_runs.png) | ![](docs/figures/10_all_runs_eval_curves.png) |
+| **3. E1-E5: v1 vs v2 features vs a behaviour-cloning warm start.** v2 clears the curriculum faster and reaches a higher eval; BC starts high but doesn't end higher. | **4. Eval curves of every run** by total training steps behind the model. The E7-E10 fine-tunes continue from the champion's 4M steps. |
+| ![](docs/figures/04_finetune_runs.png) | ![](docs/figures/05_league_training.png) |
+| **5. E7-E10 fine-tunes** (2M steps each, from the champion's weights): eval and training win rates. Only v5ft separates from the pack. | **6. E9 league training**: win rate by opponent type (self-play pool, lookahead bot, scripted bots), and the exploiter trained against the main agent. |
+| ![](docs/figures/06_progress_vs_scripted_bots.png) | ![](docs/figures/07_head_to_heads.png) |
+| **7. Every milestone model vs the scripted bots** (300-2000 battles each, 95% CIs). | **8. Every head-to-head match in the project**, coloured by significance. |
+| ![](docs/figures/08_search_beta_sweep.png) | ![](docs/figures/09_lookahead_ablation.png) |
+| **9. E10 β sweep** for `argmax log π(a) + β · lookahead(a)`: more search weight is better, and the policy breaks ties better than the lookahead alone. | **10. D23 lookahead ablation**: terastallization gives almost all of the gain; switch prediction and tuning are within noise. |
+| ![](docs/figures/11_v5ft_ppo_diagnostics.png) | |
+| **11. PPO diagnostics of v5ft**, the strongest plain policy. | |
+
+Rebuild them (reads `logs/<run>/` TensorBoard files if present, else the committed CSVs):
+
+```bash
+.venv/bin/python scripts/make_figures.py
+```
 
 ## Setup
 
@@ -50,7 +86,7 @@ no password. Keep the server running in its own terminal while you train, evalua
 ```bash
 python3.12 -m venv .venv
 .venv/bin/pip install poke-env==0.17.0 stable-baselines3==2.9.2 sb3-contrib==2.9.2 \
-    gymnasium torch tensorboard pytest
+    gymnasium torch tensorboard pytest matplotlib pandas
 ```
 
 Run every command from the project root with `.venv/bin/python`.
@@ -77,6 +113,10 @@ pokebot/surgery.py      widen a trained model's input layer for a bigger feature
 pokebot/feature_sets.py registry: version <-> obs size; PolicyPlayer auto-detects a checkpoint's version
 pokebot/bc.py           behavior cloning: record a teacher bot's battles, train a policy to imitate it
 docs/DECISIONS.md       design & decision log with every experiment and its results (start here to learn)
+docs/figures/           every figure (learning curves, diagnostics, evals, ablations), made by scripts/make_figures.py
+results/curves/         TensorBoard scalars of every training run as CSV (step, win rates, losses, schedules)
+results/evals.csv       every evaluation and head-to-head: model, opponent, wins, battles, source log
+scripts/                run_e7..e10.sh experiment pipelines, make_figures.py, setup_showdown.sh
 data/                   recorded teacher battles for behavior cloning
 pokebot/env.py          PokeBotEnv / MaskedPokeEnv (Gymnasium env with action masks),
                         make_env, make_opponent, PolicyPlayer (a Player driven by a checkpoint)

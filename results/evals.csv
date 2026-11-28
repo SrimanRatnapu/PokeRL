@@ -1,0 +1,85 @@
+experiment,kind,model,opponent,wins,battles,source
+E1,scripted,v1 @1M,maxpower,258,300,DECISIONS E1
+E1,scripted,v1 @1M,heuristic,135,300,DECISIONS E1
+E1,scripted,v1 @1M,simple_heuristic,147,300,DECISIONS E1
+E2,scripted,v1 @3M,random,496,500,DECISIONS E2
+E2,scripted,v1 @3M,maxpower,433,500,DECISIONS E2
+E2,scripted,v1 @3M,heuristic,295,500,DECISIONS E2
+E2,scripted,v1 @3M,simple_heuristic,274,500,DECISIONS E2
+E3,scripted,BC clone,maxpower,447,500,DECISIONS E3
+E3,scripted,BC clone,heuristic,245,500,DECISIONS E3
+E3,scripted,BC clone,simple_heuristic,253,500,DECISIONS E3
+E4,scripted,v2 + BC @2M,maxpower,455,500,DECISIONS E4
+E4,scripted,v2 + BC @2M,heuristic,330,500,DECISIONS E4
+E4,scripted,v2 + BC @2M,simple_heuristic,313,500,DECISIONS E4
+E5,scripted,v2 scratch @1M,maxpower,456,500,DECISIONS E5
+E5,scripted,v2 scratch @1M,heuristic,344,500,DECISIONS E5
+E5,scripted,v2 scratch @1M,simple_heuristic,321,500,DECISIONS E5
+E6,scripted,champion (v2 @4M),random,493,500,DECISIONS E6
+E6,scripted,champion (v2 @4M),maxpower,460,500,logs/final-eval.log
+E6,scripted,champion (v2 @4M),heuristic,366,500,logs/final-eval.log
+E6,scripted,champion (v2 @4M),simple_heuristic,353,500,logs/final-eval.log
+E7,scripted,v2ft,random,492,500,logs/e7-eval-v2ft.log
+E7,scripted,v2ft,maxpower,471,500,logs/e7-eval-v2ft.log
+E7,scripted,v2ft,heuristic,388,500,logs/e7-eval-v2ft.log
+E7,scripted,v2ft,simple_heuristic,357,500,logs/e7-eval-v2ft.log
+E7,scripted,v3ft,random,494,500,logs/e7-eval-v3ft.log
+E7,scripted,v3ft,maxpower,463,500,logs/e7-eval-v3ft.log
+E7,scripted,v3ft,heuristic,384,500,logs/e7-eval-v3ft.log
+E7,scripted,v3ft,simple_heuristic,371,500,logs/e7-eval-v3ft.log
+E8,scripted,v3ft2,random,497,500,logs/e8-eval-v3ft2.log
+E8,scripted,v3ft2,maxpower,455,500,logs/e8-eval-v3ft2.log
+E8,scripted,v3ft2,heuristic,384,500,logs/e8-eval-v3ft2.log
+E8,scripted,v3ft2,simple_heuristic,344,500,logs/e8-eval-v3ft2.log
+E8,scripted,v4ft,random,487,500,logs/e8-eval-v4ft.log
+E8,scripted,v4ft,maxpower,456,500,logs/e8-eval-v4ft.log
+E8,scripted,v4ft,heuristic,370,500,logs/e8-eval-v4ft.log
+E8,scripted,v4ft,simple_heuristic,385,500,logs/e8-eval-v4ft.log
+E9,scripted,league,random,492,500,logs/e9-eval-league.log
+E9,scripted,league,maxpower,471,500,logs/e9-eval-league.log
+E9,scripted,league,heuristic,377,500,logs/e9-eval-league.log
+E9,scripted,league,simple_heuristic,373,500,logs/e9-eval-league.log
+E9,scripted,league,lookahead1,239,500,logs/e9-eval-league.log
+E9,scripted,v4ft,lookahead1,241,500,logs/e9-eval-v4ft-lookahead.log
+E9,scripted,champion (v2 @4M),lookahead1,226,500,logs/e9-eval-champion-lookahead.log
+E10,scripted,v4ft,heuristic,1526,2000,logs/e10-eval-v4ft.log
+E10,scripted,v4ft,simple_heuristic,1484,2000,logs/e10-eval-v4ft.log
+E10,scripted,v4ft,lookahead,809,2000,logs/e10-eval-v4ft.log
+E10,scripted,v5ft,random,1969,2000,logs/e10-eval-v5ft.log
+E10,scripted,v5ft,maxpower,1868,2000,logs/e10-eval-v5ft.log
+E10,scripted,v5ft,heuristic,1537,2000,logs/e10-eval-v5ft.log
+E10,scripted,v5ft,simple_heuristic,1542,2000,logs/e10-eval-v5ft.log
+E10,scripted,v5ft,lookahead,824,2000,logs/e10-eval-v5ft.log
+E10,scripted,v5ft + search,lookahead,1006,2000,logs/e10-eval-v5ft-search.log
+E2,h2h,v1 @3M,v1 @1M,299,500,DECISIONS E2
+E3,h2h,BC clone,v1 @3M,222,500,DECISIONS E3
+E4,h2h,v2 + BC @2M,v1 @3M,283,500,DECISIONS E4
+E5,h2h,v2 scratch @1M,v1 @3M,295,500,DECISIONS E5
+E5,h2h,v2 scratch @1M,v2 + BC @2M,245,500,DECISIONS E5
+E6,h2h,champion (v2 @4M),v1 @3M,326,500,DECISIONS E6
+E6,h2h,champion (v2 @4M),v2 + BC @2M,298,500,DECISIONS E6
+E6,h2h,champion (v2 @4M),v2 scratch @1M,306,500,DECISIONS E6
+E7,h2h,v3ft,v2ft,247,500,logs/e7-h2h.log
+E7,h2h,v3ft,champion (v2 @4M),249,500,logs/e7-h2h-champ.log
+E7,h2h,v2ft,champion (v2 @4M),242,500,logs/e7-h2h-v2ft-champ.log
+E8,h2h,v4ft,v3ft2,243,500,logs/e8-h2h.log
+E8,h2h,v4ft,champion (v2 @4M),268,500,logs/e8-h2h-champ.log
+E9,h2h,league,v4ft,239,500,logs/e9-h2h-v4ft.log
+E9,h2h,league,champion (v2 @4M),268,500,logs/e9-h2h-champ.log
+E9,h2h,exploiter,league phase A,270,500,logs/e9-h2h-exploiter-vs-a.log
+E9,h2h,league,exploiter,265,500,logs/e9-h2h-exploiter.log
+E10,h2h,lookahead bot,champion (v2 @4M),1213,2000,logs/e10-beta-sweep.log
+E10,h2h,lookahead bot,v4ft,1175,2000,logs/e10-beta-sweep.log
+E10,h2h,v4ft,champion (v2 @4M),1043,2000,logs/e10-beta-sweep.log
+E10,h2h,v5ft,v4ft,1087,2000,logs/e10-h2h-v5-v4ft.log
+E10,h2h,v5ft,champion (v2 @4M),1122,2000,logs/e10-h2h-v5-champ.log
+E10,h2h,v4ft + search,champion (v2 @4M),1320,2000,logs/e10-beta-sweep.log
+E10,h2h,v5ft + search,champion (v2 @4M),1284,2000,logs/e10-h2h-v5search-champ.log
+E10,h2h,v5ft + search,v4ft + search,981,2000,logs/e10-h2h-v5search-v4search.log
+D23,ablation,lookahead: tera + switch prediction,lookahead1,1174,2000,DECISIONS D23
+D23,ablation,lookahead: tera only,lookahead1,1136,2000,DECISIONS D23
+D23,ablation,lookahead: switch prediction only,lookahead1,1012,2000,DECISIONS D23
+D23,ablation,lookahead: tera cost 0,lookahead1,1148,2000,DECISIONS D23
+D23,ablation,lookahead: tera cost 0.08,lookahead1,1160,2000,DECISIONS D23
+D23,ablation,lookahead: switch prob cap 0.3,lookahead1,1160,2000,DECISIONS D23
+D23,ablation,lookahead: switch prob cap 0.7,lookahead1,1196,2000,DECISIONS D23
